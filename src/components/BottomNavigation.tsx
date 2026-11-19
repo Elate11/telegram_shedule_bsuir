@@ -6,7 +6,7 @@ import { haptic } from '../services/telegram'
 interface NavigationProps {
   currentTab: number
   onTabChange: (index: number) => void
-  navMode: 'Hold' | 'Swipe' | 'Buttons'
+  navMode?: 'Hold' | 'Swipe' | 'Buttons'
   styleType: 'Minimal' | 'Techno'
   accentColor?: string
 }
@@ -14,7 +14,6 @@ interface NavigationProps {
 export const BottomNavigation: React.FC<NavigationProps> = ({
   currentTab,
   onTabChange,
-  navMode = 'Buttons',
   styleType,
   accentColor = '#2997FF'
 }) => {
@@ -25,27 +24,11 @@ export const BottomNavigation: React.FC<NavigationProps> = ({
     { title: 'Профиль', icon: User, tag: '[PRF]' },
   ]
 
-  // If in Swipe mode, show minimal dots only
-  if (navMode === 'Swipe') {
-    return (
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none z-30">
-        {tabs.map((_, i) => (
-          <div
-            key={i}
-            className={`transition-all duration-300 rounded-full ${
-              currentTab === i ? 'w-5 h-1.5 bg-white' : 'w-1.5 h-1.5 bg-white/30'
-            }`}
-          />
-        ))}
-      </div>
-    )
-  }
-
   // Techno Style: ASCII Terminal Nav exactly from Kotlin MainActivity.kt
   if (styleType === 'Techno') {
     return (
-      <div className="w-full max-w-lg mx-auto px-6 pb-4 pt-1 z-30">
-        <div className="flex w-full h-14 bg-[#0D0D0D]/95 border border-[#00FF41]/80 backdrop-blur-md">
+      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-auto px-4 pb-4 pt-1 flex justify-center bg-transparent">
+        <div className="flex w-full max-w-lg h-14 bg-[#0D0D0D]/95 border border-[#00FF41]/80 backdrop-blur-md">
           {tabs.map((tab, idx) => {
             const isSelected = currentTab === idx
             return (
@@ -70,25 +53,25 @@ export const BottomNavigation: React.FC<NavigationProps> = ({
     )
   }
 
-  // Apple Minimal: Exact sliding bubble (width: 64dp, height: 48dp, rounded: 24dp, bg: MinAccent.copy(0.22f)) + 4 dots below
+  // Apple Minimal: Floating pill navbar with exact sliding bubble and dots
   return (
-    <div className="w-full max-w-lg mx-auto px-6 pb-3 pt-1 z-30 select-none flex flex-col items-center">
-      <div className="relative w-full h-16 flex items-center">
+    <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none pb-4 px-6 flex flex-col items-center">
+      <div className="pointer-events-auto relative w-full max-w-md h-16 rounded-[28px] bg-[#1C1C1E]/90 border border-white/10 backdrop-blur-2xl shadow-2xl px-2 flex items-center">
         {/* Animated Sliding Bubble behind active item */}
-        <div className="absolute inset-0 flex pointer-events-none">
+        <div className="absolute inset-x-2 inset-y-0 flex pointer-events-none">
           {tabs.map((_, idx) => (
             <div key={idx} className="flex-1 flex items-center justify-center">
               {currentTab === idx && (
                 <motion.div
                   layoutId="slidingBubble"
-                  className="w-16 h-12 rounded-[24px]"
+                  className="w-16 h-12 rounded-[22px]"
                   style={{
-                    backgroundColor: `${accentColor}38`,
-                    border: `1px solid ${accentColor}50`
+                    backgroundColor: `${accentColor}30`,
+                    border: `1.5px solid ${accentColor}60`
                   }}
                   transition={{
                     type: 'spring',
-                    stiffness: 350,
+                    stiffness: 380,
                     damping: 28
                   }}
                 />
@@ -110,13 +93,13 @@ export const BottomNavigation: React.FC<NavigationProps> = ({
                   haptic.click()
                   onTabChange(idx)
                 }}
-                className="flex-1 flex items-center justify-center h-full active:scale-90 transition-transform"
+                className="flex-1 flex items-center justify-center h-full active:scale-90 transition-transform cursor-pointer"
               >
                 <IconComponent
                   className={`w-7 h-7 transition-colors duration-200 ${
                     isSelected ? 'text-white' : 'text-[#86868B] hover:text-zinc-300'
                   }`}
-                  style={isSelected ? { color: '#FFFFFF' } : {}}
+                  style={isSelected ? { color: accentColor } : {}}
                 />
               </button>
             )
@@ -124,8 +107,8 @@ export const BottomNavigation: React.FC<NavigationProps> = ({
         </div>
       </div>
 
-      {/* 4 Pagination Dots below bar (from Kotlin line 1370) */}
-      <div className="flex items-center gap-1.5 mt-1.5 pb-1">
+      {/* 4 Pagination Dots below bar */}
+      <div className="pointer-events-none flex items-center gap-1.5 mt-2">
         {tabs.map((_, idx) => {
           const isSelected = currentTab === idx
           return (
