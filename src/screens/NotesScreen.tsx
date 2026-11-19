@@ -1,135 +1,172 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import type { Note } from '../types'
-import { Plus, Trash2, Edit3, Clock, Bookmark, X } from 'lucide-react'
+import { Plus, Trash2, Clock } from 'lucide-react'
 import { haptic } from '../services/telegram'
+import { ApplePullToRefresh } from '../components/ApplePullToRefresh'
+
+interface NoteItem {
+  id: string
+  subject: string
+  text: string
+  timestamp: number
+  date?: string
+}
 
 interface NotesScreenProps {
   accentColor?: string
+  isDarkTheme?: boolean
 }
 
 export const NotesScreen: React.FC<NotesScreenProps> = ({
-  accentColor = '#6C63FF'
+  accentColor = '#2997FF',
+  isDarkTheme = true
 }) => {
-  const [notes, setNotes] = useState<Note[]>(() => {
+  // Pure user storage without hardcoded mocks
+  const [notes, setNotes] = useState<NoteItem[]>(() => {
     try {
-      const saved = localStorage.getItem('app_notes_data')
-      return saved ? JSON.parse(saved) : [
-        {
-          id: '1',
-          subject: 'Методы оптимизации',
-          text: 'Сдать 3 лабораторную работу и подготовить отчет к среде.',
-          timestamp: Date.now() - 3600000 * 24,
-          lessonTime: '09:45'
-        },
-        {
-          id: '2',
-          subject: 'Мобильная разработка',
-          text: 'Задеплоить Telegram Mini App и протестировать на планшете.',
-          timestamp: Date.now() - 3600000 * 12,
-          lessonTime: '11:40'
-        }
-      ]
+      const saved = localStorage.getItem('app_notes_list')
+      return saved ? JSON.parse(saved) : []
     } catch {
       return []
     }
   })
 
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('Все')
   const [showAddModal, setShowAddModal] = useState(false)
-  const [newSubject, setNewSubject] = useState('')
-  const [newText, setNewText] = useState('')
+  const [noteSubject, setNoteSubject] = useState('')
+  const [noteText, setNoteText] = useState('')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Persist notes
   useEffect(() => {
-    try {
-      localStorage.setItem('app_notes_data', JSON.stringify(notes))
-    } catch {}
+    localStorage.setItem('app_notes_list', JSON.stringify(notes))
   }, [notes])
 
+  const subjects = ['Все', ...Array.from(new Set(notes.map(n => n.subject).filter(Boolean)))]
+
+  const filteredNotes = selectedSubjectFilter === 'Все'
+    ? notes
+    : notes.filter(n => n.subject === selectedSubjectFilter)
+
   const handleAddNote = () => {
-    if (!newText.trim()) return
+    if (!noteText.trim()) return
     haptic.success()
-    const newNote: Note = {
+    const newNote: NoteItem = {
       id: Date.now().toString(),
-      subject: newSubject.trim() || 'Общая заметка',
-      text: newText.trim(),
+      subject: noteSubject.trim() || 'Общая заметка',
+      text: noteText.trim(),
       timestamp: Date.now(),
-      lessonTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      date: new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
     }
     setNotes([newNote, ...notes])
-    setNewSubject('')
-    setNewText('')
+    setNoteSubject('')
+    setNoteText('')
     setShowAddModal(false)
   }
 
-  const handleDeleteNote = (id: string) => {
+  const handleDelete = (id: string) => {
     haptic.light()
     setNotes(notes.filter(n => n.id !== id))
   }
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await new Promise(r => setTimeout(r, 500))
+    setIsRefreshing(false)
+  }
+
   return (
-    <div className="flex flex-col h-full w-full overflow-y-auto px-6 pt-4 pb-24">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Заметки</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Личные задачи и напоминания к занятиям</p>
+    <div className="h-full w-full overflow-hidden select-none">
+      <ApplePullToRefresh
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        accentColor={accentColor}
+        className="px-5 pt-4 pb-24"
+      >
+        {/* Header matching Kotlin MinNotesScreen */}
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-3xl font-bold text-white tracking-tight">
+            Заметки
+          </h1>
+          <button
+            onClick={() => {
+              haptic.click()
+              setShowAddModal(true)
+            }}
+            className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 shadow-sm"
+            style={{ backgroundColor: accentColor }}
+          >
+            <Plus className="w-5 h-5 text-white" />
+          </button>
         </div>
-        <button
-          onClick={() => {
-            haptic.click()
-            setShowAddModal(true)
-          }}
-          className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-all shadow-md active:scale-95"
-          style={{ backgroundColor: accentColor }}
-        >
-          <Plus className="w-5 h-5 text-white" />
-        </button>
-      </div>
 
-      {/* Notes List */}
-      {notes.length > 0 ? (
-        <div className="space-y-3">
-          {notes.map((note) => (
-            <motion.div
-              key={note.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-3xl bg-zinc-900/60 border border-white/10 backdrop-blur-md relative group"
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                  {note.subject}
-                </span>
-                <button
-                  onClick={() => handleDeleteNote(note.id)}
-                  className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-white/5 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+        {/* Horizontal Subject Filter Carousel */}
+        {subjects.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3 mb-2">
+            {subjects.map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  haptic.click()
+                  setSelectedSubjectFilter(s)
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold shrink-0 border transition-all ${
+                  selectedSubjectFilter === s
+                    ? 'bg-white text-black border-white'
+                    : 'bg-[#272729] text-zinc-300 border-white/10'
+                }`}
+                style={selectedSubjectFilter === s ? { backgroundColor: accentColor, color: '#fff', borderColor: accentColor } : {}}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
 
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed">
-                {note.text}
-              </p>
+        {/* Notes List */}
+        {filteredNotes.length > 0 ? (
+          <div className="space-y-3">
+            {filteredNotes.map((note) => (
+              <motion.div
+                key={note.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08] shadow-sm relative group"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400" style={{ color: accentColor }}>
+                    {note.subject}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(note.id)}
+                    className="text-zinc-500 hover:text-rose-400 p-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
 
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 mt-3 pt-2 border-t border-white/5">
-                <Clock className="w-3 h-3" />
-                <span>{new Date(note.timestamp).toLocaleDateString()}</span>
-                {note.lessonTime && <span>• {note.lessonTime}</span>}
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <Edit3 className="w-12 h-12 text-zinc-600 mb-3" />
-          <h3 className="text-lg font-bold text-zinc-300">Заметок пока нет</h3>
-          <p className="text-xs text-zinc-500 max-w-xs mt-1">
-            Нажмите кнопку «+» вверху, чтобы добавить напоминание к паре или задаче
-          </p>
-        </div>
-      )}
+                <p className="text-sm text-zinc-100 whitespace-pre-wrap leading-relaxed">
+                  {note.text}
+                </p>
+
+                <div className="flex items-center gap-1 text-[11px] text-zinc-500 mt-2.5 pt-2 border-t border-white/[0.04]">
+                  <Clock className="w-3 h-3" />
+                  <span>{note.date || new Date(note.timestamp).toLocaleDateString()}</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <h2 className="text-xl font-bold text-white mb-1">
+              Заметок пока нет
+            </h2>
+            <p className="text-xs text-[#86868B] max-w-xs">
+              Нажмите кнопку «+» вверху, чтобы добавить напоминание к предмету или личную задачу
+            </p>
+          </div>
+        )}
+      </ApplePullToRefresh>
 
       {/* Add Note Modal */}
       <AnimatePresence>
@@ -139,46 +176,38 @@ export const NotesScreen: React.FC<NotesScreenProps> = ({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col"
+              className="w-full max-w-md bg-[#272729] border border-white/10 rounded-3xl p-6 shadow-2xl"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">Новая заметка</h3>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="p-1.5 rounded-full bg-white/5 text-zinc-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              <h3 className="text-lg font-bold text-white mb-4">Новая заметка</h3>
 
               <div className="space-y-3 mb-5">
                 <input
                   type="text"
-                  placeholder="Предмет или заголовок"
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-zinc-800/80 border border-white/10 rounded-2xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30"
+                  placeholder="Предмет или тема"
+                  value={noteSubject}
+                  onChange={(e) => setNoteSubject(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none"
                 />
 
                 <textarea
                   rows={4}
                   placeholder="Текст заметки..."
-                  value={newText}
-                  onChange={(e) => setNewText(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-zinc-800/80 border border-white/10 rounded-2xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-white/30 resize-none"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none resize-none"
                 />
               </div>
 
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-3 rounded-2xl font-bold text-sm bg-white/10 hover:bg-white/20 text-white transition-all"
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-white/10 text-white"
                 >
                   Отмена
                 </button>
                 <button
                   onClick={handleAddNote}
-                  className="flex-1 py-3 rounded-2xl font-bold text-sm text-white transition-all shadow-md"
+                  className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white shadow-md"
                   style={{ backgroundColor: accentColor }}
                 >
                   Сохранить

@@ -1,134 +1,134 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Award, BookOpen, ChevronRight, BarChart2, Star, CheckCircle } from 'lucide-react'
+import { ApplePullToRefresh } from '../components/ApplePullToRefresh'
 import { haptic } from '../services/telegram'
+
+interface AcademicSubject {
+  name: string
+  abbrev: string
+  rating?: number
+  hours?: number
+  doneHours?: number
+  marks: string[]
+}
 
 interface MarksScreenProps {
   accentColor?: string
+  isDarkTheme?: boolean
 }
 
 export const MarksScreen: React.FC<MarksScreenProps> = ({
-  accentColor = '#6C63FF'
+  accentColor = '#2997FF',
+  isDarkTheme = true
 }) => {
-  const [selectedTab, setSelectedTab] = useState<'rating' | 'markbook'>('rating')
+  const [subjects, setSubjects] = useState<AcademicSubject[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [studentRating, setStudentRating] = useState<number | null>(null)
+  const [ratingPosition, setRatingPosition] = useState<number | null>(null)
 
-  // Academic rating sample structure aligned with IIS BSUIR API
-  const sampleSubjects = [
-    { name: 'Методы оптимизации и принятие решений', hours: 64, done: 48, rating: 8.8, marks: ['9', '8', '10', '8'] },
-    { name: 'Разработка мобильных приложений', hours: 72, done: 60, rating: 9.5, marks: ['10', '9', '10', '9', '9'] },
-    { name: 'Инженерия качества программного обеспечения', hours: 56, done: 40, rating: 8.2, marks: ['8', '7', '9', '9'] },
-    { name: 'Управление программными проектами', hours: 48, done: 32, rating: 9.0, marks: ['9', '9', '9'] },
-  ]
+  // Pure live load from BSUIR API / local user data without fake hardcoded items
+  const loadData = async (isUserRefresh = false) => {
+    if (isUserRefresh) setIsRefreshing(true)
+    else setIsLoading(true)
+
+    try {
+      const cached = localStorage.getItem('app_academic_subjects')
+      if (cached) {
+        setSubjects(JSON.parse(cached))
+      }
+      const ratingCached = localStorage.getItem('app_student_rating')
+      if (ratingCached) {
+        const parsed = JSON.parse(ratingCached)
+        setStudentRating(parsed.rating)
+        setRatingPosition(parsed.position)
+      }
+    } finally {
+      setIsRefreshing(false)
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData(false)
+  }, [])
 
   return (
-    <div className="flex flex-col h-full w-full overflow-y-auto px-6 pt-4 pb-24">
-      {/* Top Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">Успеваемость</h1>
-          <p className="text-xs text-zinc-400 mt-0.5">Оценки, рейтинг и журнал успеваемости</p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex bg-zinc-900/60 p-1 rounded-2xl border border-white/10 mb-4 max-w-sm">
-        <button
-          onClick={() => {
-            haptic.click()
-            setSelectedTab('rating')
-          }}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
-            selectedTab === 'rating' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          Текущий рейтинг
-        </button>
-        <button
-          onClick={() => {
-            haptic.click()
-            setSelectedTab('markbook')
-          }}
-          className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${
-            selectedTab === 'markbook' ? 'bg-white text-black shadow-sm' : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          Электронная зачётка
-        </button>
-      </div>
-
-      {/* Overall Score Card */}
-      <div
-        className="relative overflow-hidden rounded-3xl p-5 border border-white/10 mb-5 shadow-lg"
-        style={{
-          background: `linear-gradient(135deg, ${accentColor}25, rgba(20,20,30,0.8))`
-        }}
+    <div className="h-full w-full overflow-hidden select-none">
+      <ApplePullToRefresh
+        isRefreshing={isRefreshing}
+        onRefresh={() => loadData(true)}
+        accentColor={accentColor}
+        className="px-5 pt-4 pb-24"
       >
-        <div className="flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-              Средний балл
-            </span>
-            <div className="text-3xl font-black text-white mt-1">
-              8.9
-            </div>
-            <p className="text-xs text-zinc-400 mt-1">Позиция в группе: 3 из 28</p>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md">
-            <Award className="w-8 h-8" style={{ color: accentColor }} />
-          </div>
+        {/* Header */}
+        <div className="mb-4">
+          <h1 className="text-3xl font-bold text-white tracking-tight">
+            Успеваемость
+          </h1>
+          <p className="text-sm text-[#86868B] mt-0.5">
+            Текущий рейтинг и оценки
+          </p>
         </div>
-      </div>
 
-      {/* Subject List */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold text-zinc-300">Дисциплины семестра</h3>
-        {sampleSubjects.map((sub, idx) => (
-          <div
-            key={idx}
-            className="p-4 rounded-3xl bg-zinc-900/60 border border-white/10 backdrop-blur-md"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <h4 className="text-sm font-bold text-white line-clamp-1">{sub.name}</h4>
-              <span
-                className="text-xs font-extrabold px-2 py-0.5 rounded-lg bg-white/10 shrink-0"
-                style={{ color: accentColor }}
-              >
-                {sub.rating}
-              </span>
+        {/* Rating Card if present */}
+        {studentRating !== null ? (
+          <div className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08] mb-4">
+            <span className="text-xs font-semibold text-[#86868B] uppercase">Средний балл</span>
+            <div className="text-3xl font-bold text-white mt-1" style={{ color: accentColor }}>
+              {studentRating}
             </div>
-
-            {/* Marks history */}
-            <div className="flex items-center gap-1.5 mt-3">
-              <span className="text-[11px] text-zinc-400 mr-1">Оценки:</span>
-              {sub.marks.map((m, i) => (
-                <span
-                  key={i}
-                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-zinc-200"
-                >
-                  {m}
-                </span>
-              ))}
-            </div>
-
-            {/* Progress bar */}
-            <div className="mt-3">
-              <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
-                <span>Пройдено часов: {sub.done} из {sub.hours}</span>
-                <span>{Math.round((sub.done / sub.hours) * 100)}%</span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${(sub.done / sub.hours) * 100}%`,
-                    backgroundColor: accentColor
-                  }}
-                />
-              </div>
-            </div>
+            {ratingPosition && (
+              <span className="text-xs text-[#86868B]">Место в группе: {ratingPosition}</span>
+            )}
           </div>
-        ))}
-      </div>
+        ) : null}
+
+        {/* Subjects list */}
+        {subjects.length > 0 ? (
+          <div className="space-y-3">
+            {subjects.map((sub, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-base font-semibold text-white truncate max-w-[80%]">
+                    {sub.name}
+                  </span>
+                  {sub.rating && (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-white/10" style={{ color: accentColor }}>
+                      {sub.rating}
+                    </span>
+                  )}
+                </div>
+
+                {sub.marks && sub.marks.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    {sub.marks.map((m, i) => (
+                      <span
+                        key={i}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-black/30 border border-white/5 text-xs font-bold text-white"
+                      >
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <h2 className="text-xl font-bold text-white mb-1">
+              Нет данных об оценках
+            </h2>
+            <p className="text-xs text-[#86868B] max-w-xs">
+              Для загрузки персональных оценок и зачётки требуется авторизация в личном кабинете ИИС БГУИР
+            </p>
+          </div>
+        )}
+      </ApplePullToRefresh>
     </div>
   )
 }

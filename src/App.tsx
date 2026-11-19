@@ -16,9 +16,10 @@ export function App() {
     return s ? parseInt(s, 10) : 0
   })
 
-  // Theme & customization states
+  // Theme & customization states exactly like Kotlin App
   const [isDarkTheme, setIsDarkTheme] = useState(true)
-  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent_color') || '#6C63FF')
+  // Apple signature interactive blue accent: Sky Link Blue (#2997ff) on dark, Action Blue (#0066cc) on light
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('app_accent_color') || '#2997FF')
   const [styleType, setStyleType] = useState<StyleType>(() => (localStorage.getItem('app_style_type') as StyleType) || 'Minimal')
   const [navMode, setNavMode] = useState<NavigationMode>(() => (localStorage.getItem('app_nav_mode') as NavigationMode) || 'Buttons')
   const [transitionType, setTransitionType] = useState<TransitionType>(() => (localStorage.getItem('app_transition_type') as TransitionType) || 'Slide')
@@ -60,50 +61,20 @@ export function App() {
     localStorage.setItem('app_transition_type', transitionType)
   }, [transitionType])
 
-  // Transition variants
-  const getVariants = () => {
-    if (transitionType === 'Fade') {
-      return {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 }
-      }
-    }
-    if (transitionType === 'Scale') {
-      return {
-        initial: { opacity: 0, scale: 0.96 },
-        animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 0.96 }
-      }
-    }
-    // Default Slide
-    return {
-      initial: { opacity: 0, x: 20 },
-      animate: { opacity: 1, x: 0 },
-      exit: { opacity: 0, x: -20 }
-    }
-  }
+  // Effective colors from Kotlin AppleDesign
+  // actualBg: AppleTokens.Tile1 (#272729) on dark, Parchment (#F5F5F7) on light
+  const bgColor = styleType === 'Techno' ? '#000000' : isDarkTheme ? '#101116' : '#F5F5F7'
+  const textColor = styleType === 'Techno' ? '#00FF41' : isDarkTheme ? '#FFFFFF' : '#1D1D1F'
 
   return (
     <div
-      className={`relative w-full h-full flex flex-col justify-between overflow-hidden ${
-        isDarkTheme ? 'bg-[#101116] text-white' : 'bg-[#FAFAFA] text-zinc-900'
-      } ${styleType === 'Techno' ? 'font-mono' : ''}`}
+      className="relative w-full h-full flex flex-col justify-between overflow-hidden"
+      style={{ backgroundColor: bgColor, color: textColor }}
     >
-      {/* Dynamic Background Mesh Glow (Apple design) */}
-      {styleType !== 'Techno' && (
-        <div
-          className="pointer-events-none absolute top-[-10%] left-[-10%] w-[120%] h-[50%] blur-[120px] opacity-20 -z-10 transition-colors duration-500"
-          style={{
-            background: `radial-gradient(circle, ${accentColor} 0%, transparent 70%)`
-          }}
-        />
-      )}
-
-      {/* Techno Scanline effect if selected */}
+      {/* Techno Scanline overlay if Techno style is active */}
       {styleType === 'Techno' && (
         <div
-          className="pointer-events-none absolute inset-0 -z-10 opacity-5"
+          className="pointer-events-none absolute inset-0 z-30 opacity-5"
           style={{
             backgroundImage: 'repeating-linear-gradient(0deg, #00FF41, #00FF41 1px, transparent 1px, transparent 2px)',
             backgroundSize: '100% 2px'
@@ -111,16 +82,15 @@ export function App() {
         />
       )}
 
-      {/* Main Screen Swiper / Viewport */}
-      <div className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative flex flex-col">
+      {/* Main Viewport Container (Centered for tablets/desktops up to max-w-2xl) */}
+      <div className="flex-1 w-full max-w-2xl mx-auto overflow-hidden relative flex flex-col">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentTab}
-            variants={getVariants()}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className="flex-1 w-full h-full overflow-hidden"
           >
             {currentTab === 0 && (
@@ -131,16 +101,19 @@ export function App() {
                 onSubgroupChange={setSubgroup}
                 accentColor={accentColor}
                 isDarkTheme={isDarkTheme}
+                styleType={styleType}
               />
             )}
             {currentTab === 1 && (
               <MarksScreen
                 accentColor={accentColor}
+                isDarkTheme={isDarkTheme}
               />
             )}
             {currentTab === 2 && (
               <NotesScreen
                 accentColor={accentColor}
+                isDarkTheme={isDarkTheme}
               />
             )}
             {currentTab === 3 && (
@@ -161,7 +134,7 @@ export function App() {
         </AnimatePresence>
       </div>
 
-      {/* Bottom Floating Navigation */}
+      {/* Bottom Floating Navigation (Sliding bubble in Minimal / ASCII in Techno) */}
       <BottomNavigation
         currentTab={currentTab}
         onTabChange={setCurrentTab}
