@@ -28,6 +28,8 @@ import { DormitoryScreen } from './DormitoryScreen'
 import { PenaltiesScreen } from './PenaltiesScreen'
 import { AnnouncementsScreen } from './AnnouncementsScreen'
 import { IisResumeScreen } from './IisResumeScreen'
+import { LoginModal } from './LoginModal'
+import { LogIn } from 'lucide-react'
 import type { StyleType, NavigationMode, TransitionType } from '../types'
 
 interface ProfileScreenProps {
@@ -67,6 +69,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [showGroupToggle, setShowGroupToggle] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeSubScreen, setActiveSubScreen] = useState<string | null>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const isLoggedIn = Boolean(localStorage.getItem('app_auth_token'))
 
   // Subtitle crossfade interval (4000ms, identical to Kotlin lines 9480-9490)
   useEffect(() => {
@@ -286,18 +290,34 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           ))}
         </div>
 
-        {/* 4. Footer buttons: Выйти (red) and GitHub link */}
+        {/* 4. Footer buttons: Войти / Выйти and GitHub link */}
         <div className="flex flex-col items-center justify-center pb-6">
-          <button
-            onClick={() => {
-              haptic.click()
-              localStorage.clear()
-              window.location.reload()
-            }}
-            className="text-base font-medium text-[#FF3B30] py-3.5 px-6 active:opacity-70 transition-opacity"
-          >
-            Выйти
-          </button>
+          {!isLoggedIn ? (
+            <button
+              onClick={() => {
+                haptic.click()
+                setShowLoginModal(true)
+              }}
+              className="flex items-center gap-2 text-base font-semibold text-white py-3 px-6 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-95 transition-all mb-2"
+            >
+              <LogIn className="w-4 h-4 text-[#2997FF]" />
+              <span>Войти в личный кабинет ИИС</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                haptic.click()
+                localStorage.removeItem('app_auth_token')
+                localStorage.removeItem('app_network_cookies')
+                localStorage.removeItem('saved_password')
+                localStorage.removeItem('gradebook_number')
+                window.location.reload()
+              }}
+              className="text-base font-medium text-[#FF3B30] py-3.5 px-6 active:opacity-70 transition-opacity"
+            >
+              Выйти
+            </button>
+          )}
           <a
             href="https://github.com/Elate11/telegram_shedule_bsuir"
             target="_blank"
@@ -449,6 +469,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </motion.div>
           </div>
         )}
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={() => handleRefresh()} accentColor={accentColor} />
       </AnimatePresence>
     </div>
   )

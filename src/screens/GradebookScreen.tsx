@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Award } from 'lucide-react'
+import { ArrowLeft, BookOpen, Award, LogIn } from 'lucide-react'
+import { LoginModal } from './LoginModal'
 import { haptic } from '../services/telegram'
 import { NetworkClient, BASE_URL, FALLBACK_DIRECT_BASE } from '../services/networkClient'
 
@@ -26,6 +27,8 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
 }) => {
   const [semesters, setSemesters] = useState<GradebookSemester[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const isLoggedIn = Boolean(localStorage.getItem('app_auth_token'))
 
   const parseGradebook = (jsonStr: any): GradebookSemester[] => {
     try {
@@ -143,11 +146,24 @@ export const GradebookScreen: React.FC<GradebookScreenProps> = ({
             <h2 className="text-xl font-bold text-white mb-1">
               Нет данных зачётки
             </h2>
-            <p className="text-xs text-[#86868B] max-w-xs">
-              Оценки синхронизируются из ИИС БГУИР после сессии
+            <p className="text-xs text-[#86868B] max-w-xs mb-4">
+              Для отображения оценок и сессий необходимо войти в личный кабинет ИИС БГУИР
             </p>
+            {!isLoggedIn && (
+              <button
+                onClick={() => {
+                  haptic.click()
+                  setShowLoginModal(true)
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#2997FF] text-white text-sm font-semibold active:scale-95 transition-transform shadow-lg"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Войти в ИИС БГУИР</span>
+              </button>
+            )}
           </div>
         )}
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={() => loadGradebook()} accentColor={accentColor} />
       </div>
     </div>
   )
