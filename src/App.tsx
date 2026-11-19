@@ -10,7 +10,7 @@ import type { StyleType, NavigationMode, TransitionType } from './types'
 
 export function App() {
   const [currentTab, setCurrentTab] = useState(0)
-  const [currentGroup, setCurrentGroup] = useState(() => localStorage.getItem('app_selected_group') || '114001')
+  const [currentGroup, setCurrentGroup] = useState(() => localStorage.getItem('app_selected_group') || '510902')
   const [subgroup, setSubgroup] = useState<number>(() => {
     const s = localStorage.getItem('app_selected_subgroup')
     return s ? parseInt(s, 10) : 0
