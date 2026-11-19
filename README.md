@@ -44,8 +44,8 @@
 
 ### 1. Клонирование репозитория
 ```bash
-git clone https://github.com/Elate11/telegram_shedule_telegram-.git
-cd telegram_shedule_telegram-
+git clone https://github.com/Elate11/telegram_shedule_bsuir.git
+cd telegram_shedule_bsuir
 ```
 
 ### 2. Установка зависимостей
