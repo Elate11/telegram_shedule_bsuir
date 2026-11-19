@@ -276,12 +276,15 @@ class BsuirApiService {
       } catch {}
     }
 
-    // Default fallback to Kotlin screenshot baseline if not logged in
-    if (!fio) fio = 'Сороколетов Александр Александрович'
-    if (!faculty) faculty = 'ФКП'
-    if (!course) course = 2
-
-    const desc = `${faculty} ${course > 0 ? `${course} курс` : ''}`.trim()
+    // Clean fallback matching Kotlin MainActivity.kt lines 9535-9540
+    let desc = ''
+    if (!token) {
+      if (!fio) fio = 'Гость'
+      desc = 'Вход не выполнен'
+    } else {
+      if (!fio) fio = 'Студент БГУИР'
+      desc = faculty ? (course > 0 ? `${faculty}, ${course} курс` : faculty) : (group ? `Группа ${group}` : 'Студент БГУИР')
+    }
 
     localStorage.setItem('app_user_fio', fio)
     localStorage.setItem('app_selected_group', group)

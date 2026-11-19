@@ -56,11 +56,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 }) => {
   const tgUser = tg?.initDataUnsafe?.user
   const [profile, setProfile] = useState<StudentProfileData>(() => ({
-    fio: localStorage.getItem('app_user_fio') || (tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Сороколетов Александр Александрович'),
+    fio: localStorage.getItem('app_user_fio') || (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : (Boolean(localStorage.getItem('app_auth_token')) ? 'Студент БГУИР' : 'Гость')),
     group: localStorage.getItem('app_selected_group') || '510902',
-    faculty: localStorage.getItem('app_user_faculty') || 'ФКП',
-    course: parseInt(localStorage.getItem('app_user_course') || '2', 10),
-    desc: localStorage.getItem('app_user_desc') || 'ФКП ПИ (ИПОИТ) 2 курс',
+    faculty: localStorage.getItem('app_user_faculty') || '',
+    course: parseInt(localStorage.getItem('app_user_course') || '0', 10),
+    desc: localStorage.getItem('app_user_desc') || (Boolean(localStorage.getItem('app_auth_token')) ? 'БГУИР' : 'Вход не выполнен'),
     unexcusedHours: parseInt(localStorage.getItem('app_unexcused_hours') || '0', 10),
     unreadNotifs: parseInt(localStorage.getItem('app_unread_notifs') || '0', 10),
     isHeadman: localStorage.getItem('app_is_headman') === 'true'
