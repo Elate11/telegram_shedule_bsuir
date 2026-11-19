@@ -1,3 +1,4 @@
+import { NetworkClient } from './networkClient'
 import type { BsuirScheduleResponse, BsuirStudentGroup, BsuirEmployee, Lesson } from '../types'
 
 // Proxied via Vite dev server or direct fallback
