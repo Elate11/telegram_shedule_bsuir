@@ -18,6 +18,15 @@ import {
 } from 'lucide-react'
 import { haptic, tg } from '../services/telegram'
 import { ApplePullToRefresh } from '../components/ApplePullToRefresh'
+import { StudyScreen } from './StudyScreen'
+import { AbsencesScreen } from './AbsencesScreen'
+import { GroupScreen } from './GroupScreen'
+import { GradebookScreen } from './GradebookScreen'
+import { NotificationsScreen } from './NotificationsScreen'
+import { DormitoryScreen } from './DormitoryScreen'
+import { PenaltiesScreen } from './PenaltiesScreen'
+import { AnnouncementsScreen } from './AnnouncementsScreen'
+import { IisResumeScreen } from './IisResumeScreen'
 import type { StyleType, NavigationMode, TransitionType } from '../types'
 
 interface ProfileScreenProps {
@@ -45,14 +54,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onTransitionChange
 }) => {
   const tgUser = tg?.initDataUnsafe?.user
-  const [userFio, setUserFio] = useState(() => {
+  const [userFio] = useState(() => {
     return tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Александр'
   })
   const [userGroup] = useState('114001')
   const [userDesc] = useState('ФКП, 4 курс')
   const [showGroupToggle, setShowGroupToggle] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [activeModal, setActiveModal] = useState<string | null>(null)
+
+  // Sub-screens active state matching Kotlin show* booleans
+  const [activeSubScreen, setActiveSubScreen] = useState<string | null>(null)
 
   // Subtitle crossfade interval
   useEffect(() => {
@@ -68,7 +79,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsRefreshing(false)
   }
 
-  // Profile Rows exact order from Kotlin MinProfileScreen
+  // Profile Sections matching Kotlin MinProfileScreen lines 9980-10040
   const serviceSections = [
     {
       items: [
@@ -76,7 +87,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         { id: 'study', title: 'Учёба и справки', icon: FileText },
         { id: 'gradebook', title: 'Зачётка', icon: List },
         { id: 'group', title: 'Группа', icon: User, value: userGroup },
-        { id: 'omissions', title: 'Пропуски', icon: Calendar, badge: '0 ч' },
+        { id: 'absences', title: 'Пропуски', icon: Calendar, badge: '0 ч' },
       ]
     },
     {
@@ -111,7 +122,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
         accentColor={accentColor}
-        className="px-5 pt-4 pb-24"
+        className="px-5 pt-4 pb-28"
       >
         {/* 1. Profile Avatar & User Details */}
         <div className="flex flex-col items-center justify-center mb-6">
@@ -120,9 +131,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {tgUser?.photo_url ? (
                 <img src={tgUser.photo_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
               ) : (
-                <span className="text-3xl font-bold text-white">
-                  {userFio.charAt(0)}
-                </span>
+                <img src="/avatar.png" alt="Avatar" className="w-full h-full rounded-full object-cover" onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none'
+                }} />
               )}
             </div>
             <div className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#EEEEEE] text-[#111111] shadow-md cursor-pointer">
@@ -156,7 +167,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <button
                       onClick={() => {
                         haptic.click()
-                        setActiveModal(row.id)
+                        setActiveSubScreen(row.id)
                       }}
                       className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 active:bg-white/10 transition-colors text-left"
                     >
@@ -203,9 +214,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       </ApplePullToRefresh>
 
-      {/* Customization Sheet Dialog */}
+      {/* Sub-screens (Rendered as full modals on top, matching Kotlin BackHandler & screens) */}
       <AnimatePresence>
-        {activeModal === 'customization' && (
+        {activeSubScreen === 'study' && (
+          <StudyScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} isDarkTheme={isDarkTheme} />
+        )}
+        {activeSubScreen === 'absences' && (
+          <AbsencesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'group' && (
+          <GroupScreen onBack={() => setActiveSubScreen(null)} currentGroup={userGroup} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'gradebook' && (
+          <GradebookScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'notif' && (
+          <NotificationsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'dormitory' && (
+          <DormitoryScreen initialTab={0} onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'benefits' && (
+          <DormitoryScreen initialTab={1} onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'penalties' && (
+          <PenaltiesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'announcements' && (
+          <AnnouncementsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+        {activeSubScreen === 'resume' && (
+          <IisResumeScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
+
+        {/* Customization Screen */}
+        {activeSubScreen === 'customization' && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -216,7 +259,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white">Кастомизация</h3>
                 <button
-                  onClick={() => setActiveModal(null)}
+                  onClick={() => setActiveSubScreen(null)}
                   className="px-3 py-1 rounded-lg bg-white/10 text-xs text-white"
                 >
                   Готово
@@ -306,32 +349,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   ))}
                 </div>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Info Dialog for other tabs */}
-      <AnimatePresence>
-        {activeModal && activeModal !== 'customization' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-[#272729] border border-white/10 rounded-3xl p-6 shadow-2xl"
-            >
-              <h3 className="text-lg font-bold text-white mb-2">ИИС БГУИР</h3>
-              <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                Синхронизация с серверами университета в режиме реального времени. Все данные привязаны к студенческой группе.
-              </p>
-              <button
-                onClick={() => setActiveModal(null)}
-                className="w-full py-2.5 rounded-xl font-bold text-sm bg-white text-black"
-                style={{ backgroundColor: accentColor, color: '#fff' }}
-              >
-                Понятно
-              </button>
             </motion.div>
           </div>
         )}
