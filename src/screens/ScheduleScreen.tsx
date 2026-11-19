@@ -45,99 +45,103 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
   const [groupHistory, setGroupHistory] = useState<string[]>(() => {
     try {
       const h = localStorage.getItem('app_group_history')
-      return h ? JSON.parse(h) : ['114001', '310101']
+      return h ? JSON.parse(h) : ['510902', '310101']
     } catch {
-      return ['114001']
+      return ['510902']
     }
   })
-
-  // Date rail visibility toggle (swipe edge or click handle)
-  const [isDateRailVisible, setIsDateRailVisible] = useState(true)
 
   // Calendar day calculation
   const dayInfo = getBsuirWeekForCalendarDay(selectedDayIndex)
 
   // Fetch groups and employees
   useEffect(() => {
-    bsuirApi.getAllGroups().then(setAllGroups)
-    bsuirApi.getAllEmployees().then(setAllEmployees)
+    bsuirApi.getAllGroups().then(setAllGroups).catch(() => {})
+    bsuirApi.getAllEmployees().then(setAllEmployees).catch(() => {})
   }, [])
 
-  // Load schedule function
-  const loadSchedule = async (target: string) => {
-    setIsRefreshing(true)
+  // Load schedule for group or teacher
+  const loadSchedule = async () => {
     try {
-      const isTeacher = target.length > 0 && isNaN(Number(target))
-      const resp = isTeacher
-        ? await bsuirApi.getEmployeeSchedule(target)
-        : await bsuirApi.getGroupSchedule(target)
-
+      let resp
+      if (inlineTeacher) {
+        resp = await bsuirApi.getEmployeeSchedule(inlineTeacher.urlId)
+      } else if (currentGroup) {
+        resp = await bsuirApi.getGroupSchedule(currentGroup)
+      }
       if (resp) {
+        const parsed = bsuirApi.parseScheduleResponse(resp)
+        setAllLessons(parsed.lessons)
+        setExams(parsed.exams)
         setSessionPeriod({ start: resp.startExamsDate, end: resp.endExamsDate })
       }
-      const parsed = bsuirApi.parseScheduleResponse(resp)
-      setAllLessons(parsed.lessons)
-      setExams(parsed.exams)
-
-      // Add to history
-      if (target && !groupHistory.includes(target)) {
-        const newHist = [target, ...groupHistory.filter(h => h !== target)].slice(0, 8)
-        setGroupHistory(newHist)
-        localStorage.setItem('app_group_history', JSON.stringify(newHist))
-      }
-    } finally {
-      setIsRefreshing(false)
+    } catch (e) {
+      console.error('Schedule fetch error', e)
     }
   }
 
-  // Reload when group or inline teacher changes
   useEffect(() => {
-    const target = inlineTeacher ? inlineTeacher.urlId : currentGroup
-    loadSchedule(target)
+    loadSchedule()
   }, [currentGroup, inlineTeacher])
 
-  // Filter lessons for day & subgroup
-  const dayLessons = allLessons.filter(l => {
-    if (l.dayOfWeek !== dayInfo.dow) return false
-    if (l.weeks && l.weeks.length > 0 && !l.weeks.includes(dayInfo.weekNum)) return false
-    if (subgroup !== 0 && l.subgroup !== 0 && l.subgroup !== subgroup) return false
-    return true
-  }).sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await loadSchedule()
+    setIsRefreshing(false)
+  }
+
+  // Filter lessons for selected day of week (1..7) and current week number (1..4)
+  const dayLessons = React.useMemo(() => {
+    return allLessons.filter(lesson => {
+      // 1. Day of week check
+      if (lesson.dayOfWeek !== dayInfo.dow) return false
+
+      // 2. Week number check
+      if (dayInfo.weekNum > 0 && lesson.weeks && lesson.weeks.length > 0) {
+        if (!lesson.weeks.includes(dayInfo.weekNum)) return false
+      }
+
+      // 3. Subgroup filter
+      if (subgroup !== 0 && lesson.subgroup !== 0 && lesson.subgroup !== subgroup) {
+        return false
+      }
+
+      return true
+    }).sort((a, b) => a.startTime.localeCompare(b.startTime))
+  }, [allLessons, dayInfo, subgroup])
 
   const isTechno = styleType === 'Techno'
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden select-none">
-      {/* Center Content with Pull-To-Refresh */}
-      <div className="flex-1 h-full overflow-hidden flex flex-col pr-0">
-        <ApplePullToRefresh
-          isRefreshing={isRefreshing}
-          onRefresh={() => loadSchedule(inlineTeacher ? inlineTeacher.urlId : currentGroup)}
-          accentColor={accentColor}
-          className="px-5 pt-3 pb-24"
-        >
-          {/* 1. Header: Week label */}
-          <div className="w-full text-center mb-1">
+    <div className="relative w-full h-full flex flex-col overflow-hidden select-none">
+      <ApplePullToRefresh
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        accentColor={accentColor}
+        className="px-5 pt-4 pb-28 pr-16"
+      >
+        <div className="flex flex-col">
+          {/* 1. Header: 2 учебная неделя (grey) (Kotlin lines 19100-19120) */}
+          <div className="flex items-center justify-center mb-1">
             <span
               className={`text-sm font-medium ${
-                isTechno ? 'text-[#00FF41] font-mono' : isDarkTheme ? 'text-[#86868B]' : 'text-[#86868B]'
+                isTechno ? 'text-[#00FF41]/80 font-mono text-base' : 'text-[#86868B]'
               }`}
             >
               {isTechno ? `> ${dayInfo.weekNum} УЧЕБНАЯ НЕДЕЛЯ_` : `${dayInfo.weekNum} учебная неделя`}
             </span>
           </div>
 
-          {/* 2. Group Number or Inline Teacher Header */}
-          <div className="w-full flex justify-center items-center mb-3">
+          {/* 2. Group Number or Teacher Name with Chevron (Kotlin lines 19120-19200) */}
+          <div className="flex items-center justify-center mb-3">
             {inlineTeacher ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <button
                   onClick={() => {
                     haptic.click()
                     setInlineTeacher(null)
                   }}
-                  className="p-1.5 rounded-full hover:bg-white/10 text-white"
-                  style={{ color: accentColor }}
+                  className="p-1 rounded-full hover:bg-white/10 text-white"
                 >
                   <ArrowLeft className="w-6 h-6" />
                 </button>
@@ -154,16 +158,16 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                 className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-2xl hover:bg-white/5 active:scale-95 transition-transform"
               >
                 <h1
-                  className={`text-3xl font-bold tracking-tight ${
+                  className={`text-[33px] font-semibold tracking-tight ${
                     isTechno ? 'text-[#00FF41] font-mono' : isDarkTheme ? 'text-white' : 'text-[#1D1D1F]'
                   }`}
                 >
                   {isTechno ? `> ${currentGroup}_` : currentGroup}
                 </h1>
                 {isGroupExpanded ? (
-                  <ChevronUp className="w-6 h-6 text-zinc-400" />
+                  <ChevronUp className="w-6 h-6 text-[#86868B]" />
                 ) : (
-                  <ChevronDown className="w-6 h-6 text-zinc-400" />
+                  <ChevronDown className="w-6 h-6 text-[#86868B]" />
                 )}
               </button>
             )}
@@ -176,14 +180,14 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden mb-4 rounded-3xl bg-[#2A2A2C] border border-white/10 p-4 shadow-xl"
+                className="overflow-hidden mb-4 rounded-3xl bg-[#272729] border border-white/10 p-4 shadow-xl"
               >
                 {/* Search input */}
                 <div className="relative mb-3">
                   <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
                   <input
                     type="text"
-                    placeholder="Номер группы или фамилия..."
+                    placeholder="Номер группы или преподавателя"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none"
@@ -202,6 +206,9 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                           onClick={() => {
                             haptic.click()
                             onGroupChange(g.name)
+                            const newHist = [g.name, ...groupHistory.filter(h => h !== g.name)].slice(0, 5)
+                            setGroupHistory(newHist)
+                            localStorage.setItem('app_group_history', JSON.stringify(newHist))
                             setIsGroupExpanded(false)
                             setSearchQuery('')
                           }}
@@ -222,6 +229,9 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                             if (e.urlId) {
                               haptic.click()
                               setInlineTeacher({ urlId: e.urlId, name: e.fio || e.fullName || '' })
+                              const newHist = [e.fio || e.fullName || '', ...groupHistory.filter(h => h !== (e.fio || e.fullName))].slice(0, 5)
+                              setGroupHistory(newHist)
+                              localStorage.setItem('app_group_history', JSON.stringify(newHist))
                               setIsGroupExpanded(false)
                               setSearchQuery('')
                             }
@@ -272,8 +282,8 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
             )}
           </AnimatePresence>
 
-          {/* 3. Subgroup Chips: [Все] [1 подгр.] [2 подгр.] */}
-          <div className="flex items-center justify-start gap-2 mb-4">
+          {/* 3. Subgroup Chips: [Все] [1 подгр.] [2 подгр.] (Centered pill row, Kotlin lines 37000-37030) */}
+          <div className="flex items-center justify-center gap-2 mb-5">
             {[
               { id: 0, label: 'Все' },
               { id: 1, label: '1 подгр.' },
@@ -287,12 +297,12 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                     haptic.click()
                     onSubgroupChange(chip.id)
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
                     isSelected
-                      ? 'bg-white text-black border-white shadow-sm'
+                      ? 'bg-[#2997FF] text-white shadow-sm'
                       : isDarkTheme
-                        ? 'bg-[#272729] text-white border-white/10 hover:bg-[#2A2A2C]'
-                        : 'bg-white text-zinc-700 border-black/10'
+                        ? 'bg-[#272729] text-white border border-white/10 hover:bg-[#2A2A2C]'
+                        : 'bg-white text-[#1D1D1F] border border-black/10'
                   }`}
                   style={isSelected ? { backgroundColor: accentColor, color: '#FFFFFF', borderColor: accentColor } : {}}
                 >
@@ -302,7 +312,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
             })}
           </div>
 
-          {/* 4. Lessons List */}
+          {/* 4. Lessons List (Transparent rows, exact match to profile_verified_v1.png) */}
           {dayLessons.length > 0 ? (
             <div className="space-y-3 pb-8">
               {dayLessons.map((lesson, idx) => (
@@ -316,14 +326,13 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                     setSelectedLesson(lesson)
                   }}
                   onLongClick={() => {
-                    // Open modal for details
                     setSelectedLesson(lesson)
                   }}
                 />
               ))}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="flex flex-col items-center justify-center py-24 text-center">
               <h2
                 className={`text-2xl font-bold mb-1 ${
                   isTechno ? 'text-[#00FF41] font-mono' : isDarkTheme ? 'text-white' : 'text-[#1D1D1F]'
@@ -333,29 +342,28 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
               </h2>
               <p
                 className={`text-sm ${
-                  isTechno ? 'text-[#00FF41]/70 font-mono' : isDarkTheme ? 'text-[#86868B]' : 'text-[#86868B]'
+                  isTechno ? 'text-[#00FF41]/70 font-mono' : 'text-[#86868B]'
                 }`}
               >
                 Пар не найдено
               </p>
             </div>
           )}
-        </ApplePullToRefresh>
-      </div>
-
-      {/* Floating Vertical Apple Date Rail on the right */}
-      {isDateRailVisible && (
-        <div className="shrink-0 h-full border-l border-white/5 bg-transparent">
-          <AppleVerticalDateRail
-            selectedIndex={selectedDayIndex}
-            onSelectIndex={setSelectedDayIndex}
-            accentColor={accentColor}
-            isDarkTheme={isDarkTheme}
-          />
         </div>
-      )}
+      </ApplePullToRefresh>
 
-      {/* Lesson Details Dialog */}
+      {/* Vertical Date Rail on the right */}
+      <AppleVerticalDateRail
+        selectedIndex={selectedDayIndex}
+        onSelectIndex={(idx: number) => {
+          haptic.click()
+          setSelectedDayIndex(idx)
+        }}
+        accentColor={accentColor}
+        isDarkTheme={isDarkTheme}
+        />
+
+      {/* Detail Modal for Lesson */}
       <LessonDetailModal
         lesson={selectedLesson}
         onClose={() => setSelectedLesson(null)}

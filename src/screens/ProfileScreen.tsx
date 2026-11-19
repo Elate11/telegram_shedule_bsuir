@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { haptic, tg } from '../services/telegram'
 import { ApplePullToRefresh } from '../components/ApplePullToRefresh'
+import { bsuirApi, type StudentProfileData } from '../services/bsuirApi'
 import { StudyScreen } from './StudyScreen'
 import { AbsencesScreen } from './AbsencesScreen'
 import { GroupScreen } from './GroupScreen'
@@ -49,23 +50,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   styleType,
   onStyleChange,
   navMode,
-  onNavModeChange,
-  transitionType,
-  onTransitionChange
+  onNavModeChange
 }) => {
   const tgUser = tg?.initDataUnsafe?.user
-  const [userFio] = useState(() => {
-    return tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Александр'
-  })
-  const [userGroup] = useState('114001')
-  const [userDesc] = useState('ФКП, 4 курс')
+  const [profile, setProfile] = useState<StudentProfileData>(() => ({
+    fio: localStorage.getItem('app_user_fio') || (tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Сороколетов Александр Александрович'),
+    group: localStorage.getItem('app_selected_group') || '510902',
+    faculty: localStorage.getItem('app_user_faculty') || 'ФКП',
+    course: parseInt(localStorage.getItem('app_user_course') || '2', 10),
+    desc: localStorage.getItem('app_user_desc') || 'ФКП ПИ (ИПОИТ) 2 курс',
+    unexcusedHours: parseInt(localStorage.getItem('app_unexcused_hours') || '0', 10),
+    unreadNotifs: parseInt(localStorage.getItem('app_unread_notifs') || '0', 10),
+    isHeadman: localStorage.getItem('app_is_headman') === 'true'
+  }))
+
   const [showGroupToggle, setShowGroupToggle] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
-
-  // Sub-screens active state matching Kotlin show* booleans
   const [activeSubScreen, setActiveSubScreen] = useState<string | null>(null)
 
-  // Subtitle crossfade interval
+  // Subtitle crossfade interval (4000ms, identical to Kotlin lines 9480-9490)
   useEffect(() => {
     const timer = setInterval(() => {
       setShowGroupToggle(prev => !prev)
@@ -73,21 +76,43 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return () => clearInterval(timer)
   }, [])
 
+  // Live profile fetch from BSUIR API on mount
+  useEffect(() => {
+    bsuirApi.fetchStudentProfile().then(res => {
+      if (res) setProfile(res)
+    }).catch(() => {})
+  }, [])
+
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await new Promise(r => setTimeout(r, 600))
-    setIsRefreshing(false)
+    try {
+      const updated = await bsuirApi.fetchStudentProfile()
+      if (updated) setProfile(updated)
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   // Profile Sections matching Kotlin MinProfileScreen lines 9980-10040
   const serviceSections = [
     {
       items: [
-        { id: 'notif', title: 'Уведомления', icon: Bell, badge: '0 новых' },
+        {
+          id: 'notif',
+          title: 'Уведомления',
+          icon: Bell,
+          badge: profile.unreadNotifs > 0 ? `${profile.unreadNotifs} новых` : undefined
+        },
         { id: 'study', title: 'Учёба и справки', icon: FileText },
         { id: 'gradebook', title: 'Зачётка', icon: List },
-        { id: 'group', title: 'Группа', icon: User, value: userGroup },
-        { id: 'absences', title: 'Пропуски', icon: Calendar, badge: '0 ч' },
+        { id: 'group', title: 'Группа', icon: User, value: profile.group },
+        ...(profile.isHeadman ? [{ id: 'headman', title: 'Журнал старосты', icon: List }] : []),
+        {
+          id: 'absences',
+          title: 'Пропуски',
+          icon: Calendar,
+          badge: profile.unexcusedHours > 0 ? `${profile.unexcusedHours} ч` : undefined
+        },
       ]
     },
     {
@@ -122,76 +147,137 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
         accentColor={accentColor}
-        className="px-5 pt-4 pb-28"
+        className="px-6 pt-6 pb-28"
       >
-        {/* 1. Profile Avatar & User Details */}
+        {/* 1. Profile Avatar & User Details (100% Kotlin lines 9890-9970) */}
         <div className="flex flex-col items-center justify-center mb-6">
           <div className="relative">
-            <div className="w-24 h-24 rounded-full border-2 border-white/30 p-1 flex items-center justify-center overflow-hidden bg-[#2A2A2C]">
-              {tgUser?.photo_url ? (
+            <div className="w-[108px] h-[108px] rounded-full border-2 border-white/35 p-[5px] flex items-center justify-center overflow-hidden bg-[#272729]">
+              {profile.photoUrl ? (
+                <img src={profile.photoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+              ) : tgUser?.photo_url ? (
                 <img src={tgUser.photo_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
               ) : (
-                <img src="/avatar.png" alt="Avatar" className="w-full h-full rounded-full object-cover" onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none'
-                }} />
+                <img
+                  src="/avatar.png"
+                  alt="Avatar"
+                  className="w-full h-full rounded-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none'
+                  }}
+                />
               )}
             </div>
-            <div className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#EEEEEE] text-[#111111] shadow-md cursor-pointer">
-              <Edit2 className="w-3.5 h-3.5" />
-            </div>
+            {/* Edit pencil icon chip bottom-right */}
+            <label
+              htmlFor="avatar-upload"
+              className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-[#EEEEEE] flex items-center justify-center shadow-md cursor-pointer active:scale-90 transition-transform"
+            >
+              <Edit2 className="w-4 h-4 text-[#111111]" />
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      const base64 = reader.result as string
+                      localStorage.setItem('app_user_photo', base64)
+                      setProfile(prev => ({ ...prev, photoUrl: base64 }))
+                      haptic.click()
+                    }
+                    reader.readAsDataURL(file)
+                  }
+                }}
+              />
+            </label>
           </div>
 
-          <h2 className="text-2xl font-semibold text-white mt-3 text-center tracking-tight">
-            {userFio}
+          {/* FIO matching screen_profile_open.png */}
+          <h2 className="text-2xl font-semibold text-white text-center mt-3.5 leading-snug max-w-[280px]">
+            {profile.fio}
           </h2>
 
+          {/* Subtitle crossfade: group vs faculty/course */}
           <div className="h-5 mt-1 flex items-center justify-center">
-            <span className="text-sm font-normal text-[#86868B] transition-opacity duration-300">
-              {showGroupToggle ? `Группа ${userGroup}` : userDesc}
-            </span>
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={showGroupToggle ? 'group' : 'desc'}
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -2 }}
+                transition={{ duration: 0.3 }}
+                className="text-sm font-normal text-[#86868B] text-center"
+              >
+                {showGroupToggle ? `Группа ${profile.group}` : profile.desc}
+              </motion.span>
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* 2. Apple Profile Sections */}
+        {/* 2. Absences Card Pill matching screen_profile_open.png */}
+        <div
+          onClick={() => {
+            haptic.click()
+            setActiveSubScreen('absences')
+          }}
+          className="w-full bg-[#272729] rounded-[22px] p-4 mb-4 flex flex-col items-center justify-center cursor-pointer active:opacity-85 transition-opacity border border-white/[0.08]"
+        >
+          <span className="text-[17px] font-bold text-[#86868B]">
+            Пропуски (ч)
+          </span>
+          <span className="text-[29px] font-semibold text-white mt-1">
+            {profile.unexcusedHours} ч
+          </span>
+        </div>
+
+        {/* 3. Rounded Sections with ProfileRow items (Kotlin lines 9980-10040) */}
         <div className="space-y-3.5 mb-6">
-          {serviceSections.map((section, sIdx) => (
+          {serviceSections.map((sec, secIdx) => (
             <div
-              key={sIdx}
+              key={secIdx}
               className="rounded-[22px] bg-[#272729] border border-white/[0.08] overflow-hidden"
             >
-              {section.items.map((row, rIdx) => {
-                const IconComponent = row.icon
-                const isLast = rIdx === section.items.length - 1
+              {sec.items.map((item, itemIdx) => {
+                const IconComponent = item.icon
+                const isLast = itemIdx === sec.items.length - 1
                 return (
-                  <div key={row.id}>
+                  <div key={item.id}>
                     <button
                       onClick={() => {
                         haptic.click()
-                        setActiveSubScreen(row.id)
+                        setActiveSubScreen(item.id)
                       }}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 active:bg-white/10 transition-colors text-left"
+                      className="w-full min-h-[52px] px-4 py-2 flex items-center justify-between hover:bg-white/5 active:bg-white/10 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[#86868B]">
-                          <IconComponent className="w-5 h-5 text-zinc-300" />
+                        <div className="w-9 h-9 flex items-center justify-center text-[#86868B]">
+                          <IconComponent className="w-5 h-5" />
                         </div>
                         <span className="text-base font-medium text-white">
-                          {row.title}
+                          {item.title}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {row.value && (
-                          <span className="text-sm text-[#86868B]">{row.value}</span>
+                        {item.value && (
+                          <span className="text-[15px] text-[#86868B]">
+                            {item.value}
+                          </span>
                         )}
-                        {row.badge && (
-                          <span className="text-xs text-[#86868B]">{row.badge}</span>
+                        {item.badge && (
+                          <span className="text-[15px] font-medium text-[#2997FF]">
+                            {item.badge}
+                          </span>
                         )}
-                        <ChevronRight className="w-4 h-4 text-zinc-500" />
+                        <ChevronRight className="w-5 h-5 text-[#86868B]/50" />
                       </div>
                     </button>
                     {!isLast && (
-                      <div className="ml-14 border-b border-white/[0.06]" />
+                      <div className="ml-16 h-[0.5px] bg-white/[0.12]" />
                     )}
                   </div>
                 )
@@ -200,42 +286,53 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           ))}
         </div>
 
-        {/* 3. Red Exit Button */}
-        <div className="w-full flex justify-center py-2">
+        {/* 4. Footer buttons: Выйти (red) and GitHub link */}
+        <div className="flex flex-col items-center justify-center pb-6">
           <button
             onClick={() => {
-              haptic.heavy()
-              if (tg) tg.close()
+              haptic.click()
+              localStorage.clear()
+              window.location.reload()
             }}
-            className="text-base font-medium text-[#FF3B30] hover:opacity-80 active:scale-95"
+            className="text-base font-medium text-[#FF3B30] py-3.5 px-6 active:opacity-70 transition-opacity"
           >
             Выйти
           </button>
+          <a
+            href="https://github.com/Elate11/telegram_shedule_bsuir"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => haptic.click()}
+            className="text-[13px] font-medium text-[#86868B] p-2 hover:text-white transition-colors"
+          >
+            GitHub
+          </a>
         </div>
       </ApplePullToRefresh>
 
-      {/* Sub-screens (Rendered as full modals on top, matching Kotlin BackHandler & screens) */}
+      {/* Subscreens Modals */}
       <AnimatePresence>
+        {activeSubScreen === 'notif' && (
+          <NotificationsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        )}
         {activeSubScreen === 'study' && (
-          <StudyScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} isDarkTheme={isDarkTheme} />
-        )}
-        {activeSubScreen === 'absences' && (
-          <AbsencesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'group' && (
-          <GroupScreen onBack={() => setActiveSubScreen(null)} currentGroup={userGroup} accentColor={accentColor} />
+          <StudyScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
         )}
         {activeSubScreen === 'gradebook' && (
           <GradebookScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
         )}
-        {activeSubScreen === 'notif' && (
-          <NotificationsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+        {activeSubScreen === 'group' && (
+          <GroupScreen
+            onBack={() => setActiveSubScreen(null)}
+            currentGroup={profile.group}
+            accentColor={accentColor}
+          />
+        )}
+        {activeSubScreen === 'absences' && (
+          <AbsencesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
         )}
         {activeSubScreen === 'dormitory' && (
-          <DormitoryScreen initialTab={0} onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'benefits' && (
-          <DormitoryScreen initialTab={1} onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
+          <DormitoryScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
         )}
         {activeSubScreen === 'penalties' && (
           <PenaltiesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
