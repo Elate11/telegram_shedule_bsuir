@@ -1,211 +1,378 @@
-import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Users, Phone, Mail, Search } from 'lucide-react'
-import { haptic } from '../services/telegram'
-import { NetworkClient, BASE_URL, FALLBACK_DIRECT_BASE } from '../services/networkClient'
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ChevronLeft,
+  Loader2,
+  Mail,
+  Phone,
+  RefreshCw,
+  Users,
+} from 'lucide-react';
+import {
+  AppleCard,
+  AppleSearchInput,
+  colorWithAlpha,
+} from '../components/ui';
+import { useAppData } from '../context/AppDataContext';
+import { useTheme } from '../context/ThemeContext';
+import { triggerHaptic } from '../services/telegram';
+import { formatGpa, formatPhoneBelarus } from '../utils/formatters';
 
-export interface GroupCuratorInfo {
-  fio: string
-  position: string
-  phone?: string
-  email?: string
+export interface GroupScreenProps {
+  onBack: () => void;
 }
 
-export interface GroupStudentInfo {
-  fio: string
-  position: number
-  role?: string
-  isCurrentUser?: boolean
+function getCuratorInitials(fio: string): string {
+  const parts = fio.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'К';
+  return parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
-interface GroupScreenProps {
-  onBack: () => void
-  currentGroup?: string
-  accentColor?: string
+function resolveRoleColor(role: string, defaultAccent: string): string {
+  const r = role.trim().toLowerCase();
+  if (r.includes('старост') && !r.includes('зам')) return '#FFB800';
+  if (r.includes('зам')) return '#FF9500';
+  if (r.includes('спорт')) return '#34C759';
+  if (r.includes('культ')) return '#AF52DE';
+  if (r.includes('проф')) return '#007AFF';
+  if (r.includes('брсм')) return '#FF3B30';
+  return defaultAccent;
 }
 
-export const GroupScreen: React.FC<GroupScreenProps> = ({
-  onBack,
-  currentGroup = '510902',
-  accentColor = '#2997FF'
-}) => {
-  const [students, setStudents] = useState<GroupStudentInfo[]>([])
-  const [curator, setCurator] = useState<GroupCuratorInfo | null>(null)
-  const [search, setSearch] = useState('')
-  const [isLoading, setIsLoading] = useState(true)
+function resolveGpaColor(gpa: number, isDarkTheme: boolean): string {
+  if (gpa >= 8.0) return isDarkTheme ? '#4CAF50' : '#2E7D32';
+  if (gpa >= 6.0) return isDarkTheme ? '#FF9800' : '#E65100';
+  return isDarkTheme ? '#F44336' : '#C62828';
+}
 
-  const parseUserGroupInfo = (jsonStr: any, currentUserFio: string): { cur: GroupCuratorInfo | null; sts: GroupStudentInfo[] } => {
-    try {
-      const root = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr
-      let cur: GroupCuratorInfo | null = null
-      const curObj = root?.studentGroupCuratorDto
-      if (curObj && curObj.fio) {
-        cur = {
-          fio: curObj.fio.trim(),
-          position: curObj.position || 'Куратор',
-          phone: curObj.phone?.trim(),
-          email: curObj.email?.trim()
-        }
-      }
-
-      const sts: GroupStudentInfo[] = []
-      const arr = root?.groupInfoStudentDto
-      if (Array.isArray(arr)) {
-        arr.forEach((item: any, i: number) => {
-          const fio = item?.fio?.trim()
-          if (!fio) return
-          const role = item?.position?.trim()
-          const isMe = currentUserFio && (fio.toLowerCase().includes(currentUserFio.toLowerCase()) || currentUserFio.toLowerCase().includes(fio.toLowerCase()))
-          sts.push({
-            fio,
-            position: i + 1,
-            role: role || undefined,
-            isCurrentUser: Boolean(isMe)
-          })
-        })
-      }
-      return { cur, sts }
-    } catch {
-      return { cur: null, sts: [] }
-    }
-  }
-
-  const loadGroupData = async () => {
-    setIsLoading(true)
-    const myFio = localStorage.getItem('app_user_fio') || ''
-    const cached = localStorage.getItem('cached_user_group_info')
-    if (cached) {
-      try {
-        const { cur, sts } = parseUserGroupInfo(cached, myFio)
-        if (cur) setCurator(cur)
-        if (sts.length > 0) setStudents(sts)
-      } catch {}
-    }
-
-    try {
-      const url = `${BASE_URL}/student-groups/user-group-info`
-      const res = await NetworkClient.executeWithAuth(url).catch(() => {
-        return NetworkClient.executeWithAuth(`${FALLBACK_DIRECT_BASE}/student-groups/user-group-info`)
-      })
-      if (res && res.ok) {
-        const json = await res.json()
-        localStorage.setItem('cached_user_group_info', JSON.stringify(json))
-        const { cur, sts } = parseUserGroupInfo(json, myFio)
-        if (cur) setCurator(cur)
-        if (sts.length > 0) setStudents(sts)
-      }
-    } catch (e) {
-      console.warn('Group fetch error', e)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+export const GroupScreen: React.FC<GroupScreenProps> = ({ onBack }) => {
+  const { groupInfo, loadGroupInfo, profile, selectedGroup } = useAppData();
+  const { tokens, isDarkTheme } = useTheme();
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    loadGroupData()
-  }, [currentGroup])
+    void loadGroupInfo();
+  }, [loadGroupInfo]);
 
-  const filteredStudents = students.filter(s =>
-    s.fio.toLowerCase().includes(search.toLowerCase())
-  )
+  const displayGroup = profile.group.trim() || selectedGroup || '310101';
+
+  const filteredStudents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return groupInfo.students;
+    return groupInfo.students.filter(
+      (st) =>
+        st.fio.toLowerCase().includes(q) ||
+        (st.role ?? '').toLowerCase().includes(q),
+    );
+  }, [groupInfo.students, searchQuery]);
+
+  const curator = groupInfo.curator;
+  const formattedPhone = formatPhoneBelarus(curator?.phone);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#101116] text-white overflow-hidden select-none">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center px-5 pt-4 pb-3 border-b border-white/[0.08]">
+      <header className="shrink-0 px-4 pt-3 pb-2.5 flex items-center gap-2.5">
         <button
+          type="button"
           onClick={() => {
-            haptic.click()
-            onBack()
+            triggerHaptic('selection');
+            onBack();
           }}
-          className="p-1 rounded-full hover:bg-white/10 text-white mr-3"
+          aria-label="Назад"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer active:opacity-70 shrink-0"
+          style={{ color: tokens.text }}
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ChevronLeft size={24} />
         </button>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">Группа {currentGroup}</h1>
-          <p className="text-xs text-[#86868B]">Список одногруппников и куратор</p>
+
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <h1
+            className="font-semibold leading-tight truncate"
+            style={{
+              fontSize: 'calc(24px * var(--text-scale, 1))',
+              color: tokens.text,
+            }}
+          >
+            Список группы
+          </h1>
+          <span
+            className="px-2.5 py-0.5 rounded-full text-s-12 font-semibold shrink-0"
+            style={{
+              backgroundColor: colorWithAlpha(tokens.accent, 0.15),
+              color: tokens.accent,
+            }}
+          >
+            {displayGroup}
+          </span>
         </div>
-      </div>
 
-      {/* Curator card if present */}
-      <div className="px-5 pt-3">
-        {curator && (
-          <div className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08] mb-3">
-            <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider block mb-1">
-              {curator.position}
-            </span>
-            <h3 className="text-base font-bold text-white">{curator.fio}</h3>
-            {(curator.phone || curator.email) && (
-              <div className="flex items-center gap-4 mt-2 text-xs text-[#2997FF]">
-                {curator.phone && (
-                  <a href={`tel:${curator.phone}`} className="flex items-center gap-1 hover:underline">
-                    <Phone className="w-3.5 h-3.5" />
-                    <span>{curator.phone}</span>
-                  </a>
-                )}
-                {curator.email && (
-                  <a href={`mailto:${curator.email}`} className="flex items-center gap-1 hover:underline">
-                    <Mail className="w-3.5 h-3.5" />
-                    <span>{curator.email}</span>
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('impact', 'light');
+            void loadGroupInfo(true);
+          }}
+          aria-label="Обновить"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer active:opacity-70 shrink-0"
+          style={{ color: tokens.accent }}
+        >
+          <RefreshCw
+            size={20}
+            className={groupInfo.loading ? 'animate-spin' : ''}
+          />
+        </button>
+      </header>
 
-        {/* Search */}
-        <div className="relative mb-3">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Поиск по фамилии..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-[#272729] border border-white/[0.08] rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none"
+      {/* Search */}
+      {groupInfo.students.length > 0 && (
+        <div className="shrink-0 px-4 pb-3">
+          <AppleSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Поиск"
+            isDarkTheme={isDarkTheme}
+            inputBg={tokens.card}
+            inputBorder={tokens.border}
+            inputTextColor={tokens.text}
+            inputIconColor={tokens.textSecondary}
           />
         </div>
-      </div>
+      )}
 
-      {/* Students List */}
-      <div className="flex-1 overflow-y-auto px-5 pb-24">
-        {filteredStudents.length > 0 ? (
-          <div className="space-y-2">
-            {filteredStudents.map((st) => (
-              <div
-                key={st.position}
-                className={`flex items-center justify-between p-3 rounded-2xl border transition-colors ${
-                  st.isCurrentUser
-                    ? 'bg-[#2997FF]/15 border-[#2997FF]/40 text-white'
-                    : 'bg-[#272729] border-white/[0.08]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs text-[#86868B]">
-                    {st.position}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-white">{st.fio}</h4>
-                    {st.role && (
-                      <span className="text-xs font-medium text-[#2997FF]">{st.role}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* Body */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-6 flex flex-col gap-3.5">
+        {groupInfo.loading && groupInfo.students.length === 0 ? (
+          <div className="h-48 flex items-center justify-center">
+            <Loader2
+              size={28}
+              className="animate-spin"
+              style={{ color: tokens.accent }}
+            />
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Users className="w-12 h-12 text-zinc-600 mb-3" />
-            <h2 className="text-xl font-bold text-white mb-1">
-              Информация о группе
-            </h2>
-            <p className="text-xs text-[#86868B] max-w-xs">
-              Список студентов группы {currentGroup} подгружается из официального сервиса ИИС БГУИР
-            </p>
-          </div>
+          <>
+            {/* Curator Card */}
+            {curator && (
+              <AppleCard
+                isDarkTheme={isDarkTheme}
+                cardBg={tokens.card}
+                cardBorder={tokens.border}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-[44px] h-[44px] rounded-full flex items-center justify-center text-s-15 font-bold shrink-0"
+                    style={{
+                      backgroundColor: colorWithAlpha(tokens.accent, 0.16),
+                      color: tokens.accent,
+                    }}
+                  >
+                    {getCuratorInitials(curator.fio)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="text-s-11 font-semibold uppercase tracking-wide"
+                      style={{ color: tokens.accent }}
+                    >
+                      Куратор группы
+                    </div>
+                    <div
+                      className="text-s-16 font-bold leading-snug"
+                      style={{ color: tokens.text }}
+                    >
+                      {curator.fio}
+                    </div>
+                    {curator.position &&
+                      curator.position.trim() !== 'Куратор' && (
+                        <div
+                          className="text-s-12"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          {curator.position}
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+                {formattedPhone && (
+                  <a
+                    href={`tel:${curator.phone.replace(/[^\d+]/g, '')}`}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-[12px] border transition-opacity active:opacity-75"
+                    style={{
+                      borderColor: tokens.divider,
+                      backgroundColor: tokens.cardLesson,
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Phone size={17} style={{ color: '#34C759' }} className="shrink-0" />
+                      <div className="min-w-0">
+                        <div
+                          className="text-s-11"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          Телефон куратора
+                        </div>
+                        <div
+                          className="text-s-14 font-medium truncate"
+                          style={{ color: tokens.text }}
+                        >
+                          {formattedPhone}
+                        </div>
+                      </div>
+                    </div>
+                    <Phone size={15} style={{ color: '#34C759' }} className="shrink-0" />
+                  </a>
+                )}
+
+                {curator.email && (
+                  <a
+                    href={`mailto:${curator.email}`}
+                    className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-[12px] border transition-opacity active:opacity-75"
+                    style={{
+                      borderColor: tokens.divider,
+                      backgroundColor: tokens.cardLesson,
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Mail size={17} style={{ color: '#007AFF' }} className="shrink-0" />
+                      <div className="min-w-0">
+                        <div
+                          className="text-s-11"
+                          style={{ color: tokens.textSecondary }}
+                        >
+                          Электронная почта
+                        </div>
+                        <div
+                          className="text-s-14 font-medium truncate"
+                          style={{ color: tokens.text }}
+                        >
+                          {curator.email}
+                        </div>
+                      </div>
+                    </div>
+                    <Mail size={15} style={{ color: '#007AFF' }} className="shrink-0" />
+                  </a>
+                )}
+              </AppleCard>
+            )}
+
+            {/* Roster Counter */}
+            <div
+              className="text-s-13 font-medium px-1"
+              style={{ color: tokens.textSecondary }}
+            >
+              Студентов в группе: {filteredStudents.length}
+              {searchQuery.trim() ? ` (из ${groupInfo.students.length})` : ''}
+            </div>
+
+            {filteredStudents.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center text-center gap-2">
+                <Users
+                  size={34}
+                  style={{ color: tokens.textSecondary }}
+                  className="opacity-60"
+                />
+                <p
+                  className="text-s-14"
+                  style={{ color: tokens.textSecondary }}
+                >
+                  Студенты не найдены
+                </p>
+              </div>
+            ) : (
+              <AppleCard
+                isDarkTheme={isDarkTheme}
+                cardBg={tokens.card}
+                cardBorder={tokens.border}
+                className="p-0 overflow-hidden"
+              >
+                {filteredStudents.map((st, idx) => {
+                  const roleColor = st.role
+                    ? resolveRoleColor(st.role, tokens.accent)
+                    : tokens.accent;
+                  const gpaColor =
+                    st.averageMark != null
+                      ? resolveGpaColor(st.averageMark, isDarkTheme)
+                      : null;
+
+                  return (
+                    <div key={`${st.position}-${st.fio}`}>
+                      <div className="px-4 py-3 flex items-center gap-2.5">
+                        <span
+                          className="w-[28px] text-s-13 font-semibold tabular-nums shrink-0"
+                          style={{
+                            color: st.isCurrentUser
+                              ? tokens.accent
+                              : tokens.textSecondary,
+                          }}
+                        >
+                          {st.position}
+                        </span>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className="text-s-15 leading-snug"
+                              style={{
+                                color: st.isCurrentUser ? tokens.accent : tokens.text,
+                                fontWeight: st.isCurrentUser ? 600 : 500,
+                              }}
+                            >
+                              {st.fio}
+                            </span>
+
+                            {st.isCurrentUser && (
+                              <span
+                                className="px-1.5 py-0.5 rounded-[6px] text-s-10_5 font-semibold shrink-0"
+                                style={{
+                                  backgroundColor: tokens.accent,
+                                  color: tokens.accentFg,
+                                }}
+                              >
+                                ВЫ
+                              </span>
+                            )}
+                          </div>
+
+                          {st.role && (
+                            <span
+                              className="inline-block mt-0.5 text-s-12 font-semibold"
+                              style={{ color: roleColor }}
+                            >
+                              {st.role}
+                            </span>
+                          )}
+                        </div>
+
+                        {st.averageMark != null && gpaColor && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-s-12 font-semibold tabular-nums shrink-0"
+                            style={{
+                              backgroundColor: colorWithAlpha(gpaColor, 0.15),
+                              color: gpaColor,
+                            }}
+                          >
+                            {formatGpa(st.averageMark, 1)}
+                          </span>
+                        )}
+                      </div>
+                      {idx < filteredStudents.length - 1 && (
+                        <div
+                          className="mx-4 h-[0.5px]"
+                          style={{ backgroundColor: tokens.divider }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </AppleCard>
+            )}
+          </>
         )}
       </div>
     </div>
-  )
-}
+  );
+};

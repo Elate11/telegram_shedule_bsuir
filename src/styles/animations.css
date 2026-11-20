@@ -1,0 +1,58 @@
+@keyframes bsuir-sonar-ring {
+  0% {
+    transform: scale(0.15);
+    opacity: 0.34;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes charging-aura-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0.35;
+  }
+}
+
+@keyframes shimmer-skeleton {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes radial-shockwave {
+  0% {
+    width: 64px;
+    height: 64px;
+    opacity: 0.75;
+  }
+  100% {
+    width: 296px;
+    height: 296px;
+    opacity: 0;
+  }
+}
+
+.animate-radial-shockwave {
+  animation: radial-shockwave 480ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-radial-shockwave {
+    animation: none;
+    opacity: 0;
+  }
+}

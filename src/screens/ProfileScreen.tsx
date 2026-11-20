@@ -1,476 +1,653 @@
-import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Bell,
-  FileText,
-  List,
-  User,
-  Calendar,
-  BadgeAlert,
-  Home,
-  Star,
   AlertTriangle,
-  Info,
-  Settings,
+  BadgeCheck,
+  Bell,
+  BookOpen,
+  Calendar,
   ChevronRight,
+  ClipboardCheck,
+  ExternalLink,
+  FileText,
+  Home,
+  Info,
   LogOut,
-  Edit2
-} from 'lucide-react'
-import { haptic, tg } from '../services/telegram'
-import { ApplePullToRefresh } from '../components/ApplePullToRefresh'
-import { bsuirApi, type StudentProfileData } from '../services/bsuirApi'
-import { StudyScreen } from './StudyScreen'
-import { AbsencesScreen } from './AbsencesScreen'
-import { GroupScreen } from './GroupScreen'
-import { GradebookScreen } from './GradebookScreen'
-import { NotificationsScreen } from './NotificationsScreen'
-import { DormitoryScreen } from './DormitoryScreen'
-import { PenaltiesScreen } from './PenaltiesScreen'
-import { AnnouncementsScreen } from './AnnouncementsScreen'
-import { IisResumeScreen } from './IisResumeScreen'
-import { LoginModal } from './LoginModal'
-import { LogIn } from 'lucide-react'
-import type { StyleType, NavigationMode, TransitionType } from '../types'
+  Pencil,
+  Settings,
+  Star,
+  Users,
+} from 'lucide-react';
+import avatarImg from '../assets/avatar.png';
+import {
+  AppleCard,
+  ApplePullToRefresh,
+  colorWithAlpha,
+} from '../components/ui';
+import { useAppData } from '../context/AppDataContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTelegramWebApp, triggerHaptic } from '../services/telegram';
 
-interface ProfileScreenProps {
-  isDarkTheme: boolean
-  onToggleTheme: () => void
-  accentColor: string
-  onAccentChange: (color: string) => void
-  styleType: StyleType
-  onStyleChange: (style: StyleType) => void
-  navMode: NavigationMode
-  onNavModeChange: (mode: NavigationMode) => void
-  transitionType: TransitionType
-  onTransitionChange: (trans: TransitionType) => void
+export type ProfileSubScreen =
+  | 'notifications'
+  | 'study'
+  | 'gradebook'
+  | 'marks'
+  | 'group'
+  | 'headman'
+  | 'absences'
+  | 'resume'
+  | 'dormitory'
+  | 'privileges'
+  | 'penalties'
+  | 'announcements'
+  | 'customization';
+
+export interface ProfileScreenProps {
+  onNavigate: (screen: ProfileSubScreen) => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({
-  isDarkTheme,
+const GITHUB_URL = 'https://github.com/Elate11/IIS_BSUIR_Shedule_app';
+const HOLD_DURATION_MS = 5000;
+
+interface ProfileRowProps {
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties; className?: string }>;
+  title: string;
+  value?: string;
+  badge?: string;
+  accentColor: string;
+  textColor: string;
+  textSecondary: string;
+  dividerColor: string;
+  showDivider?: boolean;
+  onClick: () => void;
+}
+
+const ProfileRow: React.FC<ProfileRowProps> = ({
+  icon: Icon,
+  title,
+  value,
+  badge,
   accentColor,
-  onAccentChange,
-  styleType,
-  onStyleChange,
-  navMode,
-  onNavModeChange
-}) => {
-  const tgUser = tg?.initDataUnsafe?.user
-  const [profile, setProfile] = useState<StudentProfileData>(() => ({
-    fio: localStorage.getItem('app_user_fio') || (tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : (Boolean(localStorage.getItem('app_auth_token')) ? 'Студент БГУИР' : 'Гость')),
-    group: localStorage.getItem('app_selected_group') || '510902',
-    faculty: localStorage.getItem('app_user_faculty') || '',
-    course: parseInt(localStorage.getItem('app_user_course') || '0', 10),
-    desc: localStorage.getItem('app_user_desc') || (Boolean(localStorage.getItem('app_auth_token')) ? 'БГУИР' : 'Вход не выполнен'),
-    unexcusedHours: parseInt(localStorage.getItem('app_unexcused_hours') || '0', 10),
-    unreadNotifs: parseInt(localStorage.getItem('app_unread_notifs') || '0', 10),
-    isHeadman: localStorage.getItem('app_is_headman') === 'true'
-  }))
+  textColor,
+  textSecondary,
+  dividerColor,
+  showDivider = true,
+  onClick,
+}) => (
+  <div>
+    <button
+      type="button"
+      onClick={() => {
+        triggerHaptic('selection');
+        onClick();
+      }}
+      className="w-full px-4 py-3.5 flex items-center gap-3.5 text-left transition-opacity active:opacity-70 cursor-pointer"
+    >
+      <Icon size={20} style={{ color: accentColor }} className="shrink-0" />
+      <span
+        className="flex-1 min-w-0 truncate text-s-15 font-medium"
+        style={{ color: textColor }}
+      >
+        {title}
+      </span>
+      {badge && (
+        <span
+          className="px-2 py-0.5 rounded-full text-s-12 font-semibold text-white shrink-0"
+          style={{ backgroundColor: '#FF3B30' }}
+        >
+          {badge}
+        </span>
+      )}
+      {!badge && value && (
+        <span
+          className="text-s-13 font-medium truncate max-w-[110px] shrink-0"
+          style={{ color: textSecondary }}
+        >
+          {value}
+        </span>
+      )}
+      <ChevronRight size={17} style={{ color: textSecondary }} className="shrink-0 opacity-70" />
+    </button>
+    {showDivider && (
+      <div
+        className="mx-4 h-[0.5px]"
+        style={{ backgroundColor: dividerColor }}
+        aria-hidden="true"
+      />
+    )}
+  </div>
+);
 
-  const [showGroupToggle, setShowGroupToggle] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [activeSubScreen, setActiveSubScreen] = useState<string | null>(null)
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const isLoggedIn = Boolean(localStorage.getItem('app_auth_token'))
+function resolveAvatarSrc(customDataUrl: string | null, profilePhoto: string): string {
+  if (customDataUrl && customDataUrl.trim()) {
+    return customDataUrl;
+  }
+  const raw = (profilePhoto ?? '').trim();
+  if (!raw) return avatarImg;
+  if (raw.startsWith('data:') || raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/')) {
+    return raw;
+  }
+  return `data:image/jpeg;base64,${raw}`;
+}
 
-  // Subtitle crossfade interval (4000ms, identical to Kotlin lines 9480-9490)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setShowGroupToggle(prev => !prev)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [])
+async function scaleImageToDataUrl(file: File): Promise<string> {
+  const readAsDataUrl = () =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Не удалось прочитать файл'));
+        }
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('Ошибка чтения файла'));
+      reader.readAsDataURL(file);
+    });
 
-  // Live profile fetch from BSUIR API on mount
-  useEffect(() => {
-    bsuirApi.fetchStudentProfile().then(res => {
-      if (res) setProfile(res)
-    }).catch(() => {})
-  }, [])
+  const rawDataUrl = await readAsDataUrl();
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    try {
-      const updated = await bsuirApi.fetchStudentProfile()
-      if (updated) setProfile(updated)
-    } finally {
-      setIsRefreshing(false)
-    }
+  if (typeof Image === 'undefined' || typeof document === 'undefined') {
+    return rawDataUrl;
   }
 
-  // Profile Sections matching Kotlin MinProfileScreen lines 9980-10040
-  const serviceSections = [
-    {
-      items: [
-        {
-          id: 'notif',
-          title: 'Уведомления',
-          icon: Bell,
-          badge: profile.unreadNotifs > 0 ? `${profile.unreadNotifs} новых` : undefined
-        },
-        { id: 'study', title: 'Учёба и справки', icon: FileText },
-        { id: 'gradebook', title: 'Зачётка', icon: List },
-        { id: 'group', title: 'Группа', icon: User, value: profile.group },
-        ...(profile.isHeadman ? [{ id: 'headman', title: 'Журнал старосты', icon: List }] : []),
-        {
-          id: 'absences',
-          title: 'Пропуски',
-          icon: Calendar,
-          badge: profile.unexcusedHours > 0 ? `${profile.unexcusedHours} ч` : undefined
-        },
-      ]
-    },
-    {
-      items: [
-        { id: 'resume', title: 'Резюме и виджет ИИС', icon: BadgeAlert },
-        { id: 'dormitory', title: 'Общежитие', icon: Home },
-        { id: 'benefits', title: 'Льготы', icon: Star },
-        { id: 'penalties', title: 'Взыскания и поощрения', icon: AlertTriangle },
-        { id: 'announcements', title: 'Объявления', icon: Info },
-      ]
-    },
-    {
-      items: [
-        { id: 'customization', title: 'Кастомизация', icon: Settings },
-      ]
-    }
-  ]
+  return new Promise<string>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const maxSide = 800;
+        const w = img.naturalWidth || img.width || maxSide;
+        const h = img.naturalHeight || img.height || maxSide;
+        const ratio = Math.min(1, maxSide / Math.max(w, h));
+        const targetW = Math.max(1, Math.round(w * ratio));
+        const targetH = Math.max(1, Math.round(h * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(rawDataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const scaled = canvas.toDataURL('image/png');
+        resolve(scaled || rawDataUrl);
+      } catch {
+        resolve(rawDataUrl);
+      }
+    };
+    img.onerror = () => resolve(rawDataUrl);
+    img.src = rawDataUrl;
+  });
+}
 
-  const paletteColors = [
-    '#0066CC', // Apple Action Blue
-    '#2997FF', // Sky Link Blue
-    '#30D158', // Spring Green
-    '#FF375F', // Rose Red
-    '#FF9F0A', // Amber
-    '#BF5AF2', // Deep Purple
-    '#00FF41'  // Techno Cyber Neon
-  ]
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onNavigate }) => {
+  const {
+    profile,
+    isAuthenticated,
+    isOfflineMode,
+    selectedGroup,
+    logout,
+    setCustomAvatar,
+    refreshProfile,
+  } = useAppData();
+  const { tokens, isDarkTheme } = useTheme();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [showGroupSubtitle, setShowGroupSubtitle] = useState(true);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [maxVibrationActive, setMaxVibrationActive] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const holdIntervalRef = useRef<number | null>(null);
+  const holdStartRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const maxVibIntervalRef = useRef<number | null>(null);
+
+  const rawAvatarSrc = resolveAvatarSrc(profile.customAvatarDataUrl, profile.photo);
+  const avatarSrc = avatarFailed ? avatarImg : rawAvatarSrc;
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [rawAvatarSrc]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setShowGroupSubtitle((prev) => !prev);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!maxVibrationActive) {
+      if (maxVibIntervalRef.current !== null) {
+        window.clearInterval(maxVibIntervalRef.current);
+        maxVibIntervalRef.current = null;
+      }
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(0);
+      }
+      return;
+    }
+
+    const pulse = () => {
+      triggerHaptic('impact', 'heavy');
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate([1000, 10]);
+      }
+    };
+    pulse();
+    maxVibIntervalRef.current = window.setInterval(pulse, 1020);
+
+    return () => {
+      if (maxVibIntervalRef.current !== null) {
+        window.clearInterval(maxVibIntervalRef.current);
+        maxVibIntervalRef.current = null;
+      }
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(0);
+      }
+    };
+  }, [maxVibrationActive]);
+
+  useEffect(() => {
+    return () => {
+      if (holdIntervalRef.current !== null) {
+        window.clearInterval(holdIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const cancelHold = () => {
+    if (holdIntervalRef.current !== null) {
+      window.clearInterval(holdIntervalRef.current);
+      holdIntervalRef.current = null;
+    }
+    holdStartRef.current = null;
+    setHoldProgress(0);
+  };
+
+  const handleAvatarPointerDown: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (maxVibrationActive) {
+      setMaxVibrationActive(false);
+      triggerHaptic('impact', 'light');
+      return;
+    }
+    cancelHold();
+    const startTime = Date.now();
+    holdStartRef.current = { time: startTime, x: e.clientX, y: e.clientY };
+    holdIntervalRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1, elapsed / HOLD_DURATION_MS);
+      setHoldProgress(progress);
+      if (progress >= 1) {
+        cancelHold();
+        triggerHaptic('impact', 'heavy');
+        setMaxVibrationActive(true);
+      }
+    }, 50);
+  };
+
+  const handleAvatarPointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!holdStartRef.current) return;
+    const dx = e.clientX - holdStartRef.current.x;
+    const dy = e.clientY - holdStartRef.current.y;
+    if (Math.hypot(dx, dy) > 18) {
+      cancelHold();
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshProfile();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleAvatarFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await scaleImageToDataUrl(file);
+      setCustomAvatar(dataUrl);
+      triggerHaptic('notification', 'success');
+    } catch {
+      triggerHaptic('notification', 'error');
+    }
+  };
+
+  const handleOpenGithub = () => {
+    const tg = getTelegramWebApp() as
+      | (ReturnType<typeof getTelegramWebApp> & { openLink?: (u: string) => void })
+      | null;
+    if (tg?.openLink) {
+      tg.openLink(GITHUB_URL);
+      return;
+    }
+    window.open(GITHUB_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const displayFio =
+    profile.fio.trim() || (isAuthenticated ? 'Загрузка...' : 'Гость');
+  const displayGroup = profile.group.trim() || selectedGroup || '310101';
+  const groupSubtitle = `Группа ${displayGroup}`;
+  const descSubtitle =
+    profile.desc.trim() || (isAuthenticated ? 'Студент БГУИР' : 'Вход не выполнен');
+
+  const ringRadius = 56;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringOffset = ringCircumference * (1 - holdProgress);
 
   return (
-    <div className="h-full w-full overflow-hidden select-none">
-      <ApplePullToRefresh
-        isRefreshing={isRefreshing}
-        onRefresh={handleRefresh}
-        accentColor={accentColor}
-        className="px-6 pt-6 pb-28"
-      >
-        {/* 1. Profile Avatar & User Details (100% Kotlin lines 9890-9970) */}
-        <div className="flex flex-col items-center justify-center mb-6">
-          <div className="relative">
-            <div className="w-[108px] h-[108px] rounded-full border-2 border-white/35 p-[5px] flex items-center justify-center overflow-hidden bg-[#272729]">
-              {profile.photoUrl ? (
-                <img src={profile.photoUrl} alt="Avatar" className="w-full h-full rounded-full object-cover" />
-              ) : tgUser?.photo_url ? (
-                <img src={tgUser.photo_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
-              ) : (
-                <img
-                  src="/avatar.png"
-                  alt="Avatar"
-                  className="w-full h-full rounded-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none'
-                  }}
-                />
-              )}
-            </div>
-            {/* Edit pencil icon chip bottom-right */}
-            <label
-              htmlFor="avatar-upload"
-              className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-[#EEEEEE] flex items-center justify-center shadow-md cursor-pointer active:scale-90 transition-transform"
-            >
-              <Edit2 className="w-4 h-4 text-[#111111]" />
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    const reader = new FileReader()
-                    reader.onload = () => {
-                      const base64 = reader.result as string
-                      localStorage.setItem('app_user_photo', base64)
-                      setProfile(prev => ({ ...prev, photoUrl: base64 }))
-                      haptic.click()
-                    }
-                    reader.readAsDataURL(file)
-                  }
-                }}
-              />
-            </label>
-          </div>
-
-          {/* FIO matching screen_profile_open.png */}
-          <h2 className="text-2xl font-semibold text-white text-center mt-3.5 leading-snug max-w-[280px]">
-            {profile.fio}
-          </h2>
-
-          {/* Subtitle crossfade: group vs faculty/course */}
-          <div className="h-5 mt-1 flex items-center justify-center">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={showGroupToggle ? 'group' : 'desc'}
-                initial={{ opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -2 }}
-                transition={{ duration: 0.3 }}
-                className="text-sm font-normal text-[#86868B] text-center"
-              >
-                {showGroupToggle ? `Группа ${profile.group}` : profile.desc}
-              </motion.span>
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* 2. Absences Card Pill matching screen_profile_open.png */}
+    <ApplePullToRefresh
+      isRefreshing={isRefreshing}
+      onRefresh={() => {
+        void handleRefresh();
+      }}
+      accentColor={tokens.accent}
+      className="h-full overflow-y-auto px-4 pt-4 pb-8"
+    >
+      <div className="max-w-xl mx-auto flex flex-col items-center">
+        {/* Avatar + 5s hold progress ring + upload pencil */}
         <div
-          onClick={() => {
-            haptic.click()
-            setActiveSubScreen('absences')
-          }}
-          className="w-full bg-[#272729] rounded-[22px] p-4 mb-4 flex flex-col items-center justify-center cursor-pointer active:opacity-85 transition-opacity border border-white/[0.08]"
+          className="relative w-[122px] h-[122px] flex items-center justify-center select-none"
+          onPointerDown={handleAvatarPointerDown}
+          onPointerMove={handleAvatarPointerMove}
+          onPointerUp={cancelHold}
+          onPointerCancel={cancelHold}
+          onPointerLeave={cancelHold}
         >
-          <span className="text-[17px] font-bold text-[#86868B]">
-            Пропуски (ч)
-          </span>
-          <span className="text-[29px] font-semibold text-white mt-1">
-            {profile.unexcusedHours} ч
-          </span>
-        </div>
-
-        {/* 3. Rounded Sections with ProfileRow items (Kotlin lines 9980-10040) */}
-        <div className="space-y-3.5 mb-6">
-          {serviceSections.map((sec, secIdx) => (
-            <div
-              key={secIdx}
-              className="rounded-[22px] bg-[#272729] border border-white/[0.08] overflow-hidden"
+          {(holdProgress > 0 || maxVibrationActive) && (
+            <svg
+              width={122}
+              height={122}
+              viewBox="0 0 122 122"
+              className="absolute inset-0 pointer-events-none -rotate-90"
+              aria-hidden="true"
             >
-              {sec.items.map((item, itemIdx) => {
-                const IconComponent = item.icon
-                const isLast = itemIdx === sec.items.length - 1
-                return (
-                  <div key={item.id}>
-                    <button
-                      onClick={() => {
-                        haptic.click()
-                        setActiveSubScreen(item.id)
-                      }}
-                      className="w-full min-h-[52px] px-4 py-2 flex items-center justify-between hover:bg-white/5 active:bg-white/10 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 flex items-center justify-center text-[#86868B]">
-                          <IconComponent className="w-5 h-5" />
-                        </div>
-                        <span className="text-base font-medium text-white">
-                          {item.title}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {item.value && (
-                          <span className="text-[15px] text-[#86868B]">
-                            {item.value}
-                          </span>
-                        )}
-                        {item.badge && (
-                          <span className="text-[15px] font-medium text-[#2997FF]">
-                            {item.badge}
-                          </span>
-                        )}
-                        <ChevronRight className="w-5 h-5 text-[#86868B]/50" />
-                      </div>
-                    </button>
-                    {!isLast && (
-                      <div className="ml-16 h-[0.5px] bg-white/[0.12]" />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-
-        {/* 4. Footer buttons: Войти / Выйти and GitHub link */}
-        <div className="flex flex-col items-center justify-center pb-6">
-          {!isLoggedIn ? (
-            <button
-              onClick={() => {
-                haptic.click()
-                setShowLoginModal(true)
-              }}
-              className="flex items-center gap-2 text-base font-semibold text-white py-3 px-6 rounded-2xl bg-white/10 hover:bg-white/15 active:scale-95 transition-all mb-2"
-            >
-              <LogIn className="w-4 h-4 text-[#2997FF]" />
-              <span>Войти в личный кабинет ИИС</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                haptic.click()
-                localStorage.removeItem('app_auth_token')
-                localStorage.removeItem('app_network_cookies')
-                localStorage.removeItem('saved_password')
-                localStorage.removeItem('gradebook_number')
-                window.location.reload()
-              }}
-              className="text-base font-medium text-[#FF3B30] py-3.5 px-6 active:opacity-70 transition-opacity"
-            >
-              Выйти
-            </button>
+              <circle
+                cx={61}
+                cy={61}
+                r={ringRadius}
+                fill="none"
+                stroke="#FF3366"
+                strokeWidth={5}
+                strokeLinecap="round"
+                strokeDasharray={ringCircumference}
+                strokeDashoffset={maxVibrationActive ? 0 : ringOffset}
+              />
+            </svg>
           )}
-          <a
-            href="https://github.com/Elate11/telegram_shedule_bsuir"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => haptic.click()}
-            className="text-[13px] font-medium text-[#86868B] p-2 hover:text-white transition-colors"
+
+          <div
+            className="w-[108px] h-[108px] rounded-full p-[5px] border-2 flex items-center justify-center"
+            style={{ borderColor: colorWithAlpha(tokens.text, 0.35) }}
           >
-            GitHub
-          </a>
-        </div>
-      </ApplePullToRefresh>
+            <img
+              src={avatarSrc}
+              alt="Аватар профиля"
+              onError={() => setAvatarFailed(true)}
+              className="w-full h-full rounded-full object-cover"
+            />
+          </div>
 
-      {/* Subscreens Modals */}
-      <AnimatePresence>
-        {activeSubScreen === 'notif' && (
-          <NotificationsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'study' && (
-          <StudyScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'gradebook' && (
-          <GradebookScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'group' && (
-          <GroupScreen
-            onBack={() => setActiveSubScreen(null)}
-            currentGroup={profile.group}
-            accentColor={accentColor}
+          <button
+            type="button"
+            aria-label="Загрузить фото профиля"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            className="absolute bottom-1 right-1 w-[36px] h-[36px] rounded-full flex items-center justify-center shadow-md cursor-pointer"
+            style={{ backgroundColor: '#EEEEEE', color: '#111111' }}
+          >
+            <Pencil size={17} />
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            data-testid="avatar-file-input"
+            className="hidden"
+            onChange={(e) => {
+              void handleAvatarFileChange(e);
+            }}
           />
-        )}
-        {activeSubScreen === 'absences' && (
-          <AbsencesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'dormitory' && (
-          <DormitoryScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'penalties' && (
-          <PenaltiesScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'announcements' && (
-          <AnnouncementsScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
-        {activeSubScreen === 'resume' && (
-          <IisResumeScreen onBack={() => setActiveSubScreen(null)} accentColor={accentColor} />
-        )}
+        </div>
 
-        {/* Customization Screen */}
-        {activeSubScreen === 'customization' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-[#272729] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">Кастомизация</h3>
-                <button
-                  onClick={() => setActiveSubScreen(null)}
-                  className="px-3 py-1 rounded-lg bg-white/10 text-xs text-white"
-                >
-                  Готово
-                </button>
-              </div>
+        {/* FIO & 4s Crossfade subtitle */}
+        <h2
+          className="mt-3 text-center font-semibold leading-tight"
+          style={{
+            fontSize: 'calc(24px * var(--text-scale, 1))',
+            color: tokens.text,
+          }}
+        >
+          {displayFio}
+        </h2>
 
-              {/* Style Type */}
-              <div className="mb-4">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">
-                  Стиль
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      haptic.click()
-                      onStyleChange('Minimal')
-                    }}
-                    className={`p-3 rounded-2xl border text-sm font-semibold ${
-                      styleType === 'Minimal'
-                        ? 'bg-white/10 border-white text-white'
-                        : 'bg-black/30 border-white/5 text-zinc-400'
-                    }`}
-                  >
-                    Apple Minimal
-                  </button>
-                  <button
-                    onClick={() => {
-                      haptic.click()
-                      onStyleChange('Techno')
-                    }}
-                    className={`p-3 rounded-2xl border text-sm font-mono font-semibold ${
-                      styleType === 'Techno'
-                        ? 'bg-[#00FF41]/10 border-[#00FF41] text-[#00FF41]'
-                        : 'bg-black/30 border-white/5 text-zinc-400'
-                    }`}
-                  >
-                    Cyber Techno
-                  </button>
-                </div>
-              </div>
+        <div className="mt-1.5 min-h-[22px] flex items-center justify-center">
+          <span
+            key={showGroupSubtitle ? 'group' : 'desc'}
+            className="text-s-14 text-center transition-opacity duration-500"
+            style={{ color: tokens.textSecondary }}
+          >
+            {showGroupSubtitle ? groupSubtitle : descSubtitle}
+          </span>
+        </div>
 
-              {/* Color Accents */}
-              <div className="mb-4">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">
-                  Акцентный цвет
-                </label>
-                <div className="flex items-center justify-between p-2 rounded-2xl bg-black/30 border border-white/5">
-                  {paletteColors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => {
-                        haptic.click()
-                        onAccentChange(color)
-                      }}
-                      className="w-8 h-8 rounded-full border-2 transition-transform active:scale-90"
-                      style={{
-                        backgroundColor: color,
-                        borderColor: accentColor === color ? '#ffffff' : 'transparent',
-                        transform: accentColor === color ? 'scale(1.15)' : 'scale(1)'
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Nav mode */}
-              <div>
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-2">
-                  Навигация
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['Buttons', 'Swipe'] as NavigationMode[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => {
-                        haptic.click()
-                        onNavModeChange(m)
-                      }}
-                      className={`py-2 px-3 rounded-xl text-xs font-medium border ${
-                        navMode === m
-                          ? 'bg-white/10 border-white text-white'
-                          : 'bg-black/30 border-white/5 text-zinc-400'
-                      }`}
-                    >
-                      {m === 'Buttons' ? 'Кнопки снизу' : 'Полноэкранный свайп'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
+        {/* Role & Status Badges */}
+        {(profile.isHeadman || isOfflineMode) && (
+          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2">
+            {profile.isHeadman && (
+              <span
+                className="px-3 py-1 rounded-full text-s-12 font-semibold"
+                style={{
+                  backgroundColor: colorWithAlpha('#FFB800', 0.18),
+                  color: isDarkTheme ? '#FFB800' : '#B27A00',
+                }}
+              >
+                Староста
+              </span>
+            )}
+            {isOfflineMode && (
+              <span
+                className="px-3 py-1 rounded-full text-s-12 font-medium"
+                style={{
+                  backgroundColor: colorWithAlpha(tokens.accent, 0.14),
+                  color: tokens.accent,
+                }}
+              >
+                Демо / оффлайн
+              </span>
+            )}
           </div>
         )}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={() => handleRefresh()} accentColor={accentColor} />
-      </AnimatePresence>
-    </div>
-  )
-}
+
+        {/* Section 1 */}
+        <div className="w-full mt-5 flex flex-col gap-3.5">
+          <AppleCard
+            isDarkTheme={isDarkTheme}
+            cardBg={tokens.card}
+            cardBorder={tokens.border}
+            className="p-0 overflow-hidden"
+          >
+            <ProfileRow
+              icon={Bell}
+              title="Уведомления"
+              badge={
+                profile.unreadNotifCount > 0
+                  ? `${profile.unreadNotifCount} новых`
+                  : undefined
+              }
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('notifications')}
+            />
+            <ProfileRow
+              icon={FileText}
+              title="Учёба и справки"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('study')}
+            />
+            <ProfileRow
+              icon={BookOpen}
+              title="Зачётка"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('gradebook')}
+            />
+            <ProfileRow
+              icon={Users}
+              title="Группа"
+              value={displayGroup}
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('group')}
+            />
+            {profile.isHeadman && (
+              <ProfileRow
+                icon={ClipboardCheck}
+                title="Журнал старосты"
+                accentColor={tokens.accent}
+                textColor={tokens.text}
+                textSecondary={tokens.textSecondary}
+                dividerColor={tokens.divider}
+                onClick={() => onNavigate('headman')}
+              />
+            )}
+            <ProfileRow
+              icon={Calendar}
+              title="Пропуски"
+              badge={
+                profile.unexcusedHours > 0
+                  ? `${profile.unexcusedHours} ч`
+                  : undefined
+              }
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              showDivider={false}
+              onClick={() => onNavigate('absences')}
+            />
+          </AppleCard>
+
+          {/* Section 2 */}
+          <AppleCard
+            isDarkTheme={isDarkTheme}
+            cardBg={tokens.card}
+            cardBorder={tokens.border}
+            className="p-0 overflow-hidden"
+          >
+            <ProfileRow
+              icon={BadgeCheck}
+              title="Резюме и виджет ИИС"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('resume')}
+            />
+            <ProfileRow
+              icon={Home}
+              title="Общежитие"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('dormitory')}
+            />
+            <ProfileRow
+              icon={Star}
+              title="Льготы"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('privileges')}
+            />
+            <ProfileRow
+              icon={AlertTriangle}
+              title="Взыскания и поощрения"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              onClick={() => onNavigate('penalties')}
+            />
+            <ProfileRow
+              icon={Info}
+              title="Объявления"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              showDivider={false}
+              onClick={() => onNavigate('announcements')}
+            />
+          </AppleCard>
+
+          {/* Section 3 */}
+          <AppleCard
+            isDarkTheme={isDarkTheme}
+            cardBg={tokens.card}
+            cardBorder={tokens.border}
+            className="p-0 overflow-hidden"
+          >
+            <ProfileRow
+              icon={Settings}
+              title="Кастомизация"
+              accentColor={tokens.accent}
+              textColor={tokens.text}
+              textSecondary={tokens.textSecondary}
+              dividerColor={tokens.divider}
+              showDivider={false}
+              onClick={() => onNavigate('customization')}
+            />
+          </AppleCard>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('impact', 'medium');
+              void logout();
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-s-16 font-medium cursor-pointer transition-opacity active:opacity-70"
+            style={{ color: '#FF3B30' }}
+          >
+            <LogOut size={18} />
+            <span>Выйти</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenGithub}
+            className="inline-flex items-center gap-1.5 text-s-13 font-medium cursor-pointer opacity-80 hover:opacity-100"
+            style={{ color: tokens.textSecondary }}
+          >
+            <span>GitHub</span>
+            <ExternalLink size={13} />
+          </button>
+        </div>
+      </div>
+    </ApplePullToRefresh>
+  );
+};

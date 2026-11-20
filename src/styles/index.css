@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./animations.css";
+
+html {
+  font-size: 16px;
+  font-family: var(--font-family);
+  background-color: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: var(--font-family);
+  font-size: calc(15px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  color: var(--text);
+  padding-top: var(--tg-safe-top, 0px);
+  padding-bottom: var(--tg-safe-bottom, 0px);
+  overscroll-behavior: none;
+}
+
+@layer utilities {
+  .text-s-9_5 {
+    font-size: calc(9.5px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-10_5 {
+    font-size: calc(10.5px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-11 {
+    font-size: calc(11px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-12 {
+    font-size: calc(12px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-13 {
+    font-size: calc(13px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-14 {
+    font-size: calc(14px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-15 {
+    font-size: calc(15px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-16 {
+    font-size: calc(16px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-18 {
+    font-size: calc(18px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-21 {
+    font-size: calc(21px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+  .text-s-22 {
+    font-size: calc(22px * var(--text-scale, calc(var(--font-scale, 1.25) / 1.25)));
+  }
+}
+
+#root {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.liquid-glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -1,213 +1,290 @@
-import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Home, Star } from 'lucide-react'
-import { haptic } from '../services/telegram'
-import { NetworkClient, BASE_URL, FALLBACK_DIRECT_BASE } from '../services/networkClient'
+import React, { useEffect, useState } from 'react';
+import { ChevronLeft, Home, Loader2, RefreshCw, Star } from 'lucide-react';
+import { AppleCard, AppleOptionChip } from '../components/ui';
+import { useAppData } from '../context/AppDataContext';
+import { useTheme } from '../context/ThemeContext';
+import { triggerHaptic } from '../services/telegram';
+import { formatIsoToDDMMYYYY } from '../utils/formatters';
 
-export interface IisDormitoryAppItem {
-  id: number
-  number?: number
-  numberInQueue?: string
-  status: string
-  roomInfo?: string
-  applicationDate: string
-  acceptedDate?: string
-  settledDate?: string
-  rejectionReason?: string
-}
-
-export interface IisPrivilegeItem {
-  id: number
-  year?: number
-  categoryName: string
-  privilegeName: string
-  note?: string
-}
-
-interface DormitoryScreenProps {
-  onBack: () => void
-  accentColor?: string
+export interface DormitoryScreenProps {
+  onBack: () => void;
+  initialTab?: 0 | 1;
 }
 
 export const DormitoryScreen: React.FC<DormitoryScreenProps> = ({
   onBack,
-  accentColor = '#2997FF'
+  initialTab = 0,
 }) => {
-  const [selectedTab, setSelectedTab] = useState<0 | 1>(0)
-  const [dorms, setDorms] = useState<IisDormitoryAppItem[]>([])
-  const [privileges, setPrivileges] = useState<IisPrivilegeItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  const parseDorm = (data: any): IisDormitoryAppItem[] => {
-    const arr = Array.isArray(data) ? data : []
-    return arr.map((obj: any, i: number) => ({
-      id: obj.id || i,
-      number: obj.number,
-      numberInQueue: obj.numberInQueue?.toString(),
-      status: obj.status || 'Заявление принято',
-      roomInfo: obj.roomInfo,
-      applicationDate: obj.applicationDate || '',
-      acceptedDate: obj.acceptedDate,
-      settledDate: obj.settledDate,
-      rejectionReason: obj.rejectionReason
-    }))
-  }
-
-  const parsePriv = (data: any): IisPrivilegeItem[] => {
-    const arr = Array.isArray(data) ? data : []
-    return arr.map((obj: any, i: number) => ({
-      id: obj.id || i,
-      year: obj.year,
-      categoryName: obj.dormitoryPrivilegeCategoryName || 'Право на общежитие',
-      privilegeName: obj.dormitoryPrivilegeName || '',
-      note: obj.note
-    }))
-  }
-
-  const loadData = async () => {
-    setIsLoading(true)
-    const cachedDorm = localStorage.getItem('cached_iis_dormitory')
-    if (cachedDorm) {
-      try { setDorms(parseDorm(JSON.parse(cachedDorm))) } catch {}
-    }
-    const cachedPriv = localStorage.getItem('cached_iis_privileges')
-    if (cachedPriv) {
-      try { setPrivileges(parsePriv(JSON.parse(cachedPriv))) } catch {}
-    }
-
-    try {
-      const dormRes = await NetworkClient.executeWithAuth(`${BASE_URL}/dormitory-queue-application`).catch(() => {
-        return NetworkClient.executeWithAuth(`${FALLBACK_DIRECT_BASE}/dormitory-queue-application`)
-      })
-      if (dormRes && dormRes.ok) {
-        const json = await dormRes.json()
-        localStorage.setItem('cached_iis_dormitory', JSON.stringify(json))
-        setDorms(parseDorm(json))
-      }
-
-      const privRes = await NetworkClient.executeWithAuth(`${BASE_URL}/dormitory-queue-application/privileges`).catch(() => {
-        return NetworkClient.executeWithAuth(`${FALLBACK_DIRECT_BASE}/dormitory-queue-application/privileges`)
-      })
-      if (privRes && privRes.ok) {
-        const json = await privRes.json()
-        localStorage.setItem('cached_iis_privileges', JSON.stringify(json))
-        setPrivileges(parsePriv(json))
-      }
-    } catch (e) {
-      console.warn('Dormitory fetch error', e)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const { dormitory, loadDormitoryData } = useAppData();
+  const { tokens, isDarkTheme } = useTheme();
+  const [selectedTab, setSelectedTab] = useState<0 | 1>(initialTab);
 
   useEffect(() => {
-    loadData()
-  }, [])
+    setSelectedTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    void loadDormitoryData();
+  }, [loadDormitoryData]);
+
+  const greenColor = isDarkTheme ? '#4CC38A' : '#16A34A';
+  const redColor = isDarkTheme ? '#E5484D' : '#DC2626';
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#101116] text-white overflow-hidden select-none">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center px-5 pt-4 pb-3 border-b border-white/[0.08]">
+      <header className="shrink-0 px-4 pt-3 pb-2.5 flex items-center gap-2.5">
         <button
+          type="button"
           onClick={() => {
-            haptic.click()
-            onBack()
+            triggerHaptic('selection');
+            onBack();
           }}
-          className="p-1 rounded-full hover:bg-white/10 text-white mr-3"
+          aria-label="Назад"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer active:opacity-70 shrink-0"
+          style={{ color: tokens.text }}
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ChevronLeft size={24} />
         </button>
-        <h1 className="text-xl font-bold tracking-tight">Общежитие и льготы</h1>
-      </div>
+
+        <div className="flex-1 min-w-0">
+          <h1
+            className="font-semibold leading-tight truncate"
+            style={{
+              fontSize: 'calc(24px * var(--text-scale, 1))',
+              color: tokens.text,
+            }}
+          >
+            {selectedTab === 0 ? 'Общежитие' : 'Льготы'}
+          </h1>
+          <p
+            className="text-s-13 truncate"
+            style={{ color: tokens.textSecondary }}
+          >
+            Очередь на заселение и льготные категории
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('impact', 'light');
+            void loadDormitoryData(true);
+          }}
+          aria-label="Обновить"
+          className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer active:opacity-70 shrink-0"
+          style={{ color: tokens.accent }}
+        >
+          <RefreshCw
+            size={20}
+            className={dormitory.loading ? 'animate-spin' : ''}
+          />
+        </button>
+      </header>
 
       {/* Tabs */}
-      <div className="flex items-center px-5 pt-3 gap-2">
-        <button
-          onClick={() => {
-            haptic.click()
-            setSelectedTab(0)
-          }}
-          className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${
-            selectedTab === 0
-              ? 'bg-white/10 text-white border border-white/20'
-              : 'text-[#86868B] hover:text-white'
-          }`}
-        >
-          Очередь ({dorms.length})
-        </button>
-        <button
-          onClick={() => {
-            haptic.click()
-            setSelectedTab(1)
-          }}
-          className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${
-            selectedTab === 1
-              ? 'bg-white/10 text-white border border-white/20'
-              : 'text-[#86868B] hover:text-white'
-          }`}
-        >
-          Льготы ({privileges.length})
-        </button>
+      <div className="shrink-0 px-4 pb-3 flex items-center gap-2">
+        <AppleOptionChip
+          label={`Заявки (${dormitory.applications.length})`}
+          isSelected={selectedTab === 0}
+          isDarkTheme={isDarkTheme}
+          accentColor={tokens.accent}
+          borderColorOverride={tokens.border}
+          onClick={() => setSelectedTab(0)}
+        />
+        <AppleOptionChip
+          label={`Льготы (${dormitory.privileges.length})`}
+          isSelected={selectedTab === 1}
+          isDarkTheme={isDarkTheme}
+          accentColor={tokens.accent}
+          borderColorOverride={tokens.border}
+          onClick={() => setSelectedTab(1)}
+        />
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 pb-24">
-        {selectedTab === 0 ? (
-          dorms.length > 0 ? (
-            <div className="space-y-3">
-              {dorms.map((d) => (
-                <div
-                  key={d.id}
-                  className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08] flex items-center justify-between"
-                >
-                  <div>
-                    <h4 className="text-sm font-semibold text-white">
-                      Заявление #{d.number || d.id}
-                    </h4>
-                    <p className="text-xs text-[#86868B] mt-0.5">
-                      {d.roomInfo || 'Общежитие'} • {d.applicationDate}
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/10 text-white">
-                    {d.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
-              <Home className="w-12 h-12 text-zinc-600 mb-3" />
-              <h2 className="text-xl font-bold text-white mb-1">
-                Нет заявлений на общежитие
-              </h2>
-              <p className="text-xs text-[#86868B] max-w-xs">
-                Информация об очереди и заселении синхронизируется с ИИС
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-6">
+        {dormitory.loading &&
+        dormitory.applications.length === 0 &&
+        dormitory.privileges.length === 0 ? (
+          <div className="h-48 flex items-center justify-center">
+            <Loader2
+              size={28}
+              className="animate-spin"
+              style={{ color: tokens.accent }}
+            />
+          </div>
+        ) : selectedTab === 0 ? (
+          dormitory.applications.length === 0 ? (
+            <div className="py-16 px-4 flex flex-col items-center justify-center text-center gap-2.5">
+              <Home
+                size={36}
+                style={{ color: tokens.textSecondary }}
+                className="opacity-60"
+              />
+              <div
+                className="text-s-16 font-semibold"
+                style={{ color: tokens.text }}
+              >
+                Заявок на общежитие нет
+              </div>
+              <p
+                className="text-s-13 max-w-xs"
+                style={{ color: tokens.textSecondary }}
+              >
+                Данные подтягиваются из очереди заселения ИИС БГУИР
               </p>
             </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {dormitory.applications.map((d) => {
+                const dateParts = [
+                  d.applicationDate
+                    ? `Подано: ${formatIsoToDDMMYYYY(d.applicationDate)}`
+                    : '',
+                  d.acceptedDate
+                    ? `Принято: ${formatIsoToDDMMYYYY(d.acceptedDate)}`
+                    : '',
+                  d.settledDate
+                    ? `Заселение: ${formatIsoToDDMMYYYY(d.settledDate)}`
+                    : '',
+                ].filter(Boolean);
+
+                return (
+                  <AppleCard
+                    key={d.id}
+                    isDarkTheme={isDarkTheme}
+                    cardBg={tokens.card}
+                    cardBorder={tokens.border}
+                    className="flex flex-col gap-1.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className="text-s-16 font-semibold"
+                        style={{ color: tokens.text }}
+                      >
+                        {d.number != null
+                          ? `Заявление №${d.number}`
+                          : 'Заявление на заселение'}
+                      </span>
+                      <span
+                        className="text-s-13 font-semibold shrink-0"
+                        style={{ color: greenColor }}
+                      >
+                        {d.status}
+                      </span>
+                    </div>
+
+                    {d.roomInfo && (
+                      <div
+                        className="text-s-15 font-medium"
+                        style={{ color: tokens.accent }}
+                      >
+                        Место: {d.roomInfo}
+                      </div>
+                    )}
+
+                    {d.numberInQueue && (
+                      <div
+                        className="text-s-14"
+                        style={{ color: tokens.text }}
+                      >
+                        Номер в очереди: {d.numberInQueue}
+                      </div>
+                    )}
+
+                    {dateParts.length > 0 && (
+                      <div
+                        className="text-s-12"
+                        style={{ color: tokens.textSecondary }}
+                      >
+                        {dateParts.join(' • ')}
+                      </div>
+                    )}
+
+                    {d.rejectionReason && d.rejectionReason.trim() && (
+                      <div
+                        className="text-s-13"
+                        style={{ color: redColor }}
+                      >
+                        Причина: {d.rejectionReason}
+                      </div>
+                    )}
+                  </AppleCard>
+                );
+              })}
+            </div>
           )
-        ) : privileges.length > 0 ? (
-          <div className="space-y-3">
-            {privileges.map((p) => (
-              <div
-                key={p.id}
-                className="p-4 rounded-2xl bg-[#272729] border border-white/[0.08]"
-              >
-                <h4 className="text-sm font-semibold text-white">{p.categoryName}</h4>
-                <p className="text-xs text-[#86868B] mt-0.5">{p.privilegeName}</p>
-              </div>
-            ))}
+        ) : dormitory.privileges.length === 0 ? (
+          <div className="py-16 px-4 flex flex-col items-center justify-center text-center gap-2.5">
+            <Star
+              size={36}
+              style={{ color: tokens.textSecondary }}
+              className="opacity-60"
+            />
+            <div
+              className="text-s-16 font-semibold"
+              style={{ color: tokens.text }}
+            >
+              Зарегистрированных льгот нет
+            </div>
+            <p
+              className="text-s-13 max-w-xs"
+              style={{ color: tokens.textSecondary }}
+            >
+              Здесь отображаются категории первоочередного и внеочередного права
+              на общежитие
+            </p>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <Star className="w-12 h-12 text-zinc-600 mb-3" />
-            <h2 className="text-xl font-bold text-white mb-1">
-              Льготы не найдены
-            </h2>
-            <p className="text-xs text-[#86868B] max-w-xs">
-              Подтвержденные социальные льготы отображаются здесь
-            </p>
+          <div className="flex flex-col gap-3">
+            {dormitory.privileges.map((p) => (
+              <AppleCard
+                key={p.id}
+                isDarkTheme={isDarkTheme}
+                cardBg={tokens.card}
+                cardBorder={tokens.border}
+                className="flex flex-col gap-1.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className="text-s-16 font-semibold"
+                    style={{ color: tokens.text }}
+                  >
+                    {p.categoryName || 'Право на общежитие'}
+                  </span>
+                  {p.year != null && (
+                    <span
+                      className="text-s-13 font-semibold shrink-0"
+                      style={{ color: tokens.accent }}
+                    >
+                      {p.year} г.
+                    </span>
+                  )}
+                </div>
+
+                {p.privilegeName && (
+                  <p
+                    className="text-s-14 leading-[1.4]"
+                    style={{ color: tokens.text }}
+                  >
+                    {p.privilegeName}
+                  </p>
+                )}
+
+                {p.note && p.note.trim() && (
+                  <div
+                    className="text-s-13"
+                    style={{ color: tokens.textSecondary }}
+                  >
+                    Примечание: {p.note}
+                  </div>
+                )}
+              </AppleCard>
+            ))}
           </div>
         )}
       </div>
     </div>
-  )
-}
+  );
+};

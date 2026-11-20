@@ -1,0 +1,67 @@
+@font-face {
+  font-family: 'GoogleSans';
+  src: url('/fonts/google_sans_regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GoogleSans';
+  src: url('/fonts/google_sans_bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root,
+[data-theme='dark'] {
+  --bg: #272729;
+  --actual-bg: #272729;
+  --card: #2A2A2C;
+  --card-lesson: #252527;
+  --text: #FFFFFF;
+  --text-secondary: #CCCCCC;
+  --text-muted: #7A7A7A;
+  --accent: #2997FF;
+  --accent-fg: #FFFFFF;
+  --accent-focus: #2997FF;
+  --border: rgba(255, 255, 255, 0.12);
+  --divider: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(42, 42, 44, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --track: #1C1C1E;
+  --thumb: #2C2C2E;
+  --font-scale: 1.25;
+  --text-scale: 1;
+  --font-family: 'GoogleSans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --tg-safe-area-inset-top: 0px;
+  --tg-safe-area-inset-bottom: 0px;
+  --tg-safe-area-inset-left: 0px;
+  --tg-safe-area-inset-right: 0px;
+  --tg-content-safe-area-inset-top: 0px;
+  --tg-content-safe-area-inset-bottom: 0px;
+  --tg-safe-top: var(--tg-content-safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --tg-safe-bottom: var(--tg-content-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg: #F5F5F7;
+  --actual-bg: #F5F5F7;
+  --card: #FFFFFF;
+  --card-lesson: #FAFAFC;
+  --text: #1D1D1F;
+  --text-secondary: #86868B;
+  --text-muted: #7A7A7A;
+  --accent: #0066CC;
+  --accent-fg: #FFFFFF;
+  --accent-focus: #0071E3;
+  --border: rgba(0, 0, 0, 0.12);
+  --divider: #F0F0F0;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(0, 0, 0, 0.10);
+  --track: #E5E5EA;
+  --thumb: #FFFFFF;
+  color-scheme: light;
+}
